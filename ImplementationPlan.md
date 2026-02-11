@@ -138,6 +138,8 @@ Wire the FM login and OData lookup together into an Auth.js provider — the sin
     3. Call `queryUserPrivileges()` — if fails, log warning but continue with empty privileges
     4. Return `FileMakerUser` object
 
+> **Security note:** When OData is unavailable or misconfigured, the user will be authenticated but have an empty `role` and `projects`. This is by design — the package handles *authentication*, not *authorization*. Consuming apps **must** verify that `session.user.role` and `session.user.projects` are non-empty before granting access to protected resources. Treat empty privileges as unauthorized.
+
 **Test:** `__tests__/provider.test.ts` — Mock `fmLogin` + `queryUserPrivileges`, test success/auth-failure/odata-failure paths
 
 ### Step 7: JWT and Session callbacks

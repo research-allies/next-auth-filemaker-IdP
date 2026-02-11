@@ -21,6 +21,14 @@ FM_ODATA_TABLE=UserPrivileges
 AUTH_SECRET=<random-secret>
 ```
 
+Generate `AUTH_SECRET` with:
+
+```bash
+npx auth secret
+# or
+openssl rand -base64 32
+```
+
 ## 3. Create `auth.ts` in the app root
 
 Import the three factory functions, build your config object mapping to your app's specific FM database/table/field names, and initialize NextAuth:
@@ -106,6 +114,8 @@ declare module "next-auth/jwt" {
 - Use `auth()` in server components or middleware to get the session
 - Check `session.user.role` and `session.user.projects` to gate access to pages/features
 - Use `extractFmToken()` with `getToken()` in server-side API routes if you need to make further FM Data API calls
+
+> **Important:** If the OData privilege lookup fails (e.g. server unreachable or misconfigured), the user will still be authenticated but `role` and `projects` will be empty. Always check that these values are present and valid before granting access — treat empty privileges as unauthorized.
 
 ```typescript
 // Example: middleware.ts
