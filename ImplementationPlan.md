@@ -120,7 +120,7 @@ Build the module that queries FileMaker via OData to look up what role and proje
 - **`queryUserPrivileges(config, username, password): Promise<UserPrivileges>`**
   - `GET /fmi/odata/v4/{db}/{table}?$filter={usernameField} eq '{username}'&$select={roleField},{projectField}`
   - Auth: `Authorization: Basic base64(user:pass)` (stateless, per-request)
-  - Extracts `role` from first record, collects unique `projects` across all matching records
+  - Extracts `roles` and unique `projects` across all matching records
   - Throws `ODataQueryError` on failure or no records found
 
 **Test:** `__tests__/odata-client.test.ts` — Mock fetch, test URL construction, field escaping, multi-row project collection
