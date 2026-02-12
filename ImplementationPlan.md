@@ -71,13 +71,25 @@ Define the data shapes and configuration options that every other module depends
 - `fetch?: typeof globalThis.fetch` — Injectable for self-signed cert handling
 
 **`ODataFieldMapping`** (configurable per-app):
-- `usernameField: string` — Field used in `$filter`
-- `roleField: string` — Field holding the role value
-- `projectField: string` — Field holding project identifier(s)
+- `idUserField: string` — `id_user` field (PK/FK, same name across all tables)
+- `usernameField: string` — Field used in `$filter` for login lookup
+- `idProjectField: string` — `id_project` field (PK/FK, same name across all tables)
+- `projectNameField: string` — Project name field
+- `idRoleField: string` — `id_role` field (PK/FK, same name across all tables)
+- `roleNameField: string` — Role name field
 - `additionalFields?: string[]`
 
 **`FileMakerUser`** (returned from `authorize`, stored in JWT):
-- `id`, `name`, `fmToken`, `fmTokenIssuedAt`, `role`, `projects: string[]`
+- `id`, `name`, `fmToken`, `fmTokenIssuedAt`, `projects: ProjectAssignment[]`
+
+**`ProjectAssignment`** (one entry per project the user is assigned to):
+- `projectId: string`, `projectName: string`, `roles: string[]`
+
+**FileMaker schema** (four tables):
+- **User** — `id_user` (PK), `user_name`, `password`, `name`, etc.
+- **Project** — `id_project` (PK), `project_name`, etc.
+- **Role** — `id_role` (PK), `role_name` (e.g. "viewer", "editor", "admin", "PI")
+- **UserProjectRole** — `id_user` (FK), `id_project` (FK), `id_role` (FK) — join table allowing a user to hold multiple roles across multiple projects
 
 **Error classes:** `FileMakerIdPError` (base), `FileMakerAuthError`, `ODataQueryError`, `ConfigurationError`
 
@@ -117,10 +129,10 @@ Build the module that queries FileMaker via OData to look up what role and proje
 
 **File:** `src/odata-client.ts`
 
-- **`queryUserPrivileges(config, username, password): Promise<UserPrivileges>`**
-  - `GET /fmi/odata/v4/{db}/{table}?$filter={usernameField} eq '{username}'&$select={roleField},{projectField}`
+- **`queryUserPrivileges(config, username, password): Promise<ProjectAssignment[]>`**
+  - Queries the `UserProjectRole` join table (via OData) filtered by the user's `id_user`, expanding/joining to `Project` and `Role` tables to resolve `project_name` and `role_name`
   - Auth: `Authorization: Basic base64(user:pass)` (stateless, per-request)
-  - Extracts `roles` and unique `projects` across all matching records
+  - Groups results by project, collecting all assigned roles per project into `ProjectAssignment[]`
   - Throws `ODataQueryError` on failure or no records found
 
 **Test:** `__tests__/odata-client.test.ts` — Mock fetch, test URL construction, field escaping, multi-row project collection
@@ -138,7 +150,7 @@ Wire the FM login and OData lookup together into an Auth.js provider — the sin
     3. Call `queryUserPrivileges()` — if fails, log warning but continue with empty privileges
     4. Return `FileMakerUser` object
 
-> **Security note:** When OData is unavailable or misconfigured, the user will be authenticated but have an empty `role` and `projects`. This is by design — the package handles *authentication*, not *authorization*. Consuming apps **must** verify that `session.user.role` and `session.user.projects` are non-empty before granting access to protected resources. Treat empty privileges as unauthorized.
+> **Security note:** When OData is unavailable or misconfigured, the user will be authenticated but have an empty `projects` array. This is by design — the package handles *authentication*, not *authorization*. Consuming apps **must** verify that `session.user.projects` is non-empty and contains the required roles before granting access to protected resources. Treat empty privileges as unauthorized.
 
 **Test:** `__tests__/provider.test.ts` — Mock `fmLogin` + `queryUserPrivileges`, test success/auth-failure/odata-failure paths
 
@@ -147,8 +159,8 @@ Control what user data gets stored in the encrypted JWT token and what gets expo
 
 **File:** `src/callbacks.ts`
 
-- **`createJwtCallback(config)`** — On `signIn` trigger, copies `fmToken`, `fmTokenIssuedAt`, `role`, `projects` from user to JWT token
-- **`createSessionCallback(config)`** — Forwards `role`, `projects`, `id`, `name` from JWT to session. **Excludes `fmToken`** (security: must not reach client)
+- **`createJwtCallback(config)`** — On `signIn` trigger, copies `fmToken`, `fmTokenIssuedAt`, `projects` (array of `ProjectAssignment`) from user to JWT token
+- **`createSessionCallback(config)`** — Forwards `projects`, `id`, `name` from JWT to session. **Excludes `fmToken`** (security: must not reach client)
 - **`extractFmToken(jwt): string | null`** — Helper for server-side FM API calls
 - **`isFmTokenFresh(jwt, marginSeconds?): boolean`** — Checks 15min inactivity window
 
@@ -209,9 +221,12 @@ const fmConfig = {
     database: process.env.FM_DATABASE!,
     tableName: process.env.FM_ODATA_TABLE!,
     fields: {
-      usernameField: "AccountName",
-      roleField: "Role",
-      projectField: "ProjectID",
+      idUserField: "id_user",
+      usernameField: "user_name",
+      idProjectField: "id_project",
+      projectNameField: "project_name",
+      idRoleField: "id_role",
+      roleNameField: "role_name",
     },
   },
 };
@@ -226,7 +241,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 });
 ```
 
-Apps add a `types/next-auth.d.ts` to augment Auth.js types with `role` and `projects` on the Session/JWT interfaces.
+Apps add a `types/next-auth.d.ts` to augment Auth.js types with `projects: ProjectAssignment[]` on the Session/JWT interfaces.
 
 ---
 
@@ -236,7 +251,7 @@ Apps add a `types/next-auth.d.ts` to augment Auth.js types with `role` and `proj
 2. **Typecheck:** `npm run typecheck` — no errors
 3. **Unit tests:** `npm test` — all pass with mocked fetch
 4. **Manual integration test:** Install in a test NextJS app, configure against a FM Server, verify:
-   - Login with valid credentials → session contains role + projects
+   - Login with valid credentials → session contains projects with roles
    - Login with invalid credentials → redirected to error/login page
    - Session object does NOT expose `fmToken`
    - `extractFmToken()` works in server-side routes
