@@ -12,7 +12,7 @@ Change these before deploying to production
 
 | Account name | password | description |
 |---|---|---|
-| admin | H6JFtwe883 | full access to the file |
+| admin | admin883 | full access to the demo FileMaker files |
 | acct_dapi | acct_dapi | FM Data API access to validate the id |
 
 ## FileMaker user privilege sets
