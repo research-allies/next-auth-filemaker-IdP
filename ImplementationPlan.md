@@ -141,8 +141,7 @@ Provide a function that reads `process.env` and returns a validated `FileMakerId
   - Applies sensible defaults for field names and `useHttps`
   - Throws `ConfigurationError` if required vars (`FM_HOST`, `FM_DATABASE`, `FM_SERVICE_USERNAME`, `FM_SERVICE_PASSWORD`) are missing
   - Accepts an optional `overrides` parameter for programmatic settings like `fetch`
-  - **Server-only:** This function reads `process.env` and must only be called in server-side code (e.g. `auth.ts`). The `"use client"` login form component must never import `loadConfigFromEnv`.
-
+  - **⚠️ SECURITY: Server-only function** — This function reads `process.env` (including service account credentials) and **must only be called in server-side code** (e.g. `auth.ts`). Never import or call `loadConfigFromEnv` from client components or any code marked with `"use client"`. Doing so would expose service credentials to the browser.
 **Test:** `__tests__/env.test.ts` — Set/unset env vars, test defaults, test `ConfigurationError` on missing required vars, test overrides merge
 
 ### Step 4: Utilities
@@ -165,14 +164,15 @@ Build the module that talks directly to FileMaker Server. This handles credentia
   - Throws `FileMakerAuthError` on 401, `FileMakerIdPError` on network errors
 
 - **`fmFindUserWithPrivileges(config, token, username): Promise<{ profile: UserProfile, projects: ProjectAssignment[] }>`**
+- **`fmFindUserWithPrivileges(config, token, username): Promise<{ profile: UserProfile, projects: ProjectAssignment[] }>`**
   - `POST /fmi/data/vLatest/databases/{db}/layouts/{userLayout}/_find` with `Authorization: Bearer {token}`
   - Request body: `{ "query": [{ "{usernameField}": "={username}" }], "portal": ["{portalName}"] }`
   - Parses `response.data[0].fieldData` for profile fields (`id_user`, `nameFirst`, `nameLast`, `email`)
   - Parses `response.data[0].portalData["{portalName}"]` for project/role assignments — portal row keys are in `TableName::fieldName` format (e.g. `"project::projectName"`, `"role::roleName"`)
   - Groups portal rows by `projectIdField`, collecting all assigned roles per project into `ProjectAssignment[]`
   - Returns both profile and projects in a single result
-  - Throws `FileMakerQueryError` on failure or no matching user found
-
+  - Throws `FileMakerQueryError` on API failure or when no matching user is found
+  - Returns empty `projects: []` array when user exists but has no portal rows (no assignments)
 - **`fmLogout(config, token): Promise<void>`**
   - `DELETE /fmi/data/vLatest/databases/{db}/sessions/{token}`
   - Fire-and-forget (logs warnings, never throws)

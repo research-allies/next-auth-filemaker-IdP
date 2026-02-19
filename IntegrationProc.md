@@ -148,7 +148,7 @@ import { auth } from "@/auth";
 export default async function ProjectAdminPage({ params }: { params: { projectId: string } }) {
   const session = await auth();
   const project = session?.user.projects.find((p) => p.projectId === params.projectId);
-  const isAdmin = project?.roles.includes("admin");
+  const isAdmin = project?.roles?.includes("admin");
 
   if (!isAdmin) {
     return <p>Access denied</p>;
