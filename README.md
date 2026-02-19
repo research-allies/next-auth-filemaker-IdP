@@ -1,5 +1,5 @@
 # next-auth-filemaker-IdP
-Authentication module for NextJS to use FileMaker Server as an identify provider.
+Authentication module for NextJS to use FileMaker Server as an identify provider (IdP).
 
 ## FileMaker Files
 | Filename | description |
@@ -12,6 +12,8 @@ Change these before deploying to production
 
 | Account name | password | description |
 |---|---|---|
-| admin | admin | full access to the file |
+| admin | H6JFtwe883 | full access to the file |
 | acct_dapi | acct_dapi | FM Data API access to validate the id |
-| acct_odata | acct_odata | OData access to retreive account records and claims |
+
+## FileMaker user privilege sets
+To manage internal FileMaker accounts across multiple FileMaker files follow the instructions in IdP_Accounts.fmp12. Note that all privilege sets assigned to users MUST have the FM_DAPI extended privilege set enabled in the IdP_Accounts.fmp12 file in order to use FM as the IdP.

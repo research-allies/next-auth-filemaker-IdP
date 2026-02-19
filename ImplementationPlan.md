@@ -2,13 +2,13 @@
 
 ## Context
 
-The project needs a reusable Auth.js v5 provider package that authenticates users against an on-premises FileMaker Server via the Data API, then queries OData for role/project privileges. This package will be installed in multiple NextJS apps (Monitor, Design) via GitHub Packages. The repo is brand new (only LICENSE + README exist).
+The project needs a reusable Auth.js v5 provider package that authenticates users against an on-premises FileMaker Server via the Data API, then queries the user's profile and role/project privileges via the same Data API. This package will be installed in multiple NextJS apps via GitHub Packages. The repo is new (only LICENSE + README exist).
 
 **Key architectural decisions:**
 - **Auth.js v5** (latest, ESM-first, `auth.ts` root config pattern)
 - **GitHub Packages** (private, scoped `@org/next-auth-filemaker-idp`)
-- **Configurable schema** (table names, field names passed per-app)
-- **FileMaker Server on-prem** (Basic Auth for both Data API and OData)
+- **Environment-driven config** (all settings via env vars; `.env.local` for dev, service env vars for production)
+- **FileMaker Data API only** (credential validation via session endpoint; profile + privileges via Find with portal data)
 - **JWT session strategy** (FM token in JWT server-side only; role/projects forwarded to client session)
 
 ---
@@ -20,23 +20,24 @@ next-auth-filemaker-IdP/
 ├── src/
 │   ├── index.ts              # Re-exports all public API
 │   ├── types.ts              # All TypeScript interfaces
+│   ├── env.ts                # loadConfigFromEnv() — reads env vars into FileMakerIdPConfig
 │   ├── errors.ts             # Custom error classes
 │   ├── utils.ts              # Base64 encoding, URL builders
-│   ├── filemaker-client.ts   # FM Data API client (login/logout/validate)
-│   ├── odata-client.ts       # OData query client (roles/projects)
+│   ├── filemaker-client.ts   # FM Data API client (login/logout/validate/find user)
 │   ├── provider.ts           # Auth.js CredentialsProvider factory
 │   ├── callbacks.ts          # JWT + Session callback factories, token helpers
 │   └── components/
 │       └── FileMakerLoginForm.tsx  # "use client" login form component
 ├── __tests__/
+│   ├── env.test.ts
 │   ├── filemaker-client.test.ts
-│   ├── odata-client.test.ts
 │   ├── provider.test.ts
 │   └── callbacks.test.ts
 ├── package.json
 ├── tsconfig.json
 ├── tsup.config.ts            # Dual CJS/ESM build
 ├── vitest.config.ts
+├── .env.example              # Template of all required env vars
 ├── .gitignore
 ├── .github/workflows/publish.yml
 ├── LICENSE                   # (exists)
@@ -53,6 +54,8 @@ Set up the foundation of the npm package — the configuration files that define
 **Files:** `package.json`, `tsconfig.json`, `tsup.config.ts`, `vitest.config.ts`, `.gitignore`
 
 - `package.json`: Scoped name, `"type": "module"`, dual CJS/ESM exports, `next-auth@^5` as peer dep, dev deps: `typescript`, `tsup`, `vitest`, `@types/node`. `publishConfig` pointing to GitHub Packages.
+  - `"exports"`: `{ ".": { "import": "./dist/index.js", "require": "./dist/index.cjs", "types": "./dist/index.d.ts" } }`
+  - `"files": ["dist", ".env.example"]` — only publish build output and env template (excludes `src/`, `__tests__/`, etc.)
 - `tsconfig.json`: `target: ES2020`, `module: ESNext`, `moduleResolution: bundler`, `strict: true`
 - `tsup.config.ts`: Entry `src/index.ts`, formats `["cjs", "esm"]`, `dts: true`, externalize `next-auth`, `@auth/core`, `react`, `react-dom`
 - Peer deps: `next-auth@^5`, `react@^18 || ^19`, `react-dom@^18 || ^19`
@@ -63,49 +66,96 @@ Define the data shapes and configuration options that every other module depends
 
 **Files:** `src/types.ts`, `src/errors.ts`
 
-**`FileMakerIdPConfig`** (top-level config consumers pass):
-- `host: string` — FM Server hostname
-- `database: string` — Database name for Data API login
-- `odata: ODataConfig` — Contains `database`, `tableName`, `fields: ODataFieldMapping`
-- `useHttps?: boolean` (default `true`)
-- `fetch?: typeof globalThis.fetch` — Injectable for self-signed cert handling
+**`FileMakerIdPConfig`** (built from environment variables via `loadConfigFromEnv()`):
+- `host` ← `FM_HOST` — FM Server hostname
+- `database` ← `FM_DATABASE` — Database name for Data API
+- `useHttps` ← `FM_USE_HTTPS` (default `true`)
+- `serviceUsername` ← `FM_SERVICE_USERNAME` — Backend service account for profile/privilege queries
+- `servicePassword` ← `FM_SERVICE_PASSWORD` — Backend service account password
+- `fetch?: typeof globalThis.fetch` — Only programmatic override (not from env), for self-signed cert handling
+- `userLayout` ← `FM_USER_LAYOUT` (default `"User"`) — Data API layout name for user profile + portal
+- `fields` — FieldMapping (see below)
 
-**`ODataFieldMapping`** (configurable per-app):
-- `idUserField: string` — `id_user` field (PK/FK, same name across all tables)
-- `usernameField: string` — Field used in `$filter` for login lookup
-- `idProjectField: string` — `id_project` field (PK/FK, same name across all tables)
-- `projectNameField: string` — Project name field
-- `idRoleField: string` — `id_role` field (PK/FK, same name across all tables)
-- `roleNameField: string` — Role name field
-- `additionalFields?: string[]`
+**`FieldMapping`** (from env vars):
+- `idUserField` ← `FM_FIELD_ID_USER` (default `"id_user"`) — PK on User table
+- `usernameField` ← `FM_FIELD_USERNAME` (default `"userName"`) — used in Find query
+- `nameFirstField` ← `FM_FIELD_NAME_FIRST` (default `"nameFirst"`)
+- `nameLastField` ← `FM_FIELD_NAME_LAST` (default `"nameLast"`)
+- `emailField` ← `FM_FIELD_EMAIL` (default `"email"`)
+- `portalName` ← `FM_PORTAL_NAME` (default `"userProjectRole"`) — portal name on the User layout (case-sensitive, matches FM relationship name)
+- `projectIdField` ← `FM_FIELD_PROJECT_ID` (default `"project::id_project"`) — portal field, `TableName::fieldName` format
+- `projectNameField` ← `FM_FIELD_PROJECT_NAME` (default `"project::projectName"`) — portal field, `TableName::fieldName` format
+- `roleNameField` ← `FM_FIELD_ROLE_NAME` (default `"role::roleName"`) — portal field, `TableName::fieldName` format
+
+**`.env.example`** (shipped with the package as a reference):
+```
+# FileMaker Server connection
+FM_HOST=fm.example.com
+FM_DATABASE=IdP_Accounts
+FM_USE_HTTPS=true
+
+# Service account for backend profile/privilege queries (not the end user's credentials)
+FM_SERVICE_USERNAME=
+FM_SERVICE_PASSWORD=
+
+# Data API layout for user profile lookup (includes UserProjectRole portal)
+FM_USER_LAYOUT=User
+
+# User table fields (defaults shown — only override if your schema differs)
+FM_FIELD_ID_USER=id_user
+FM_FIELD_USERNAME=userName
+FM_FIELD_NAME_FIRST=nameFirst
+FM_FIELD_NAME_LAST=nameLast
+FM_FIELD_EMAIL=email
+
+# UserProjectRole portal fields (portal rows use TableName::fieldName format)
+FM_PORTAL_NAME=userProjectRole
+FM_FIELD_PROJECT_ID=project::id_project
+FM_FIELD_PROJECT_NAME=project::projectName
+FM_FIELD_ROLE_NAME=role::roleName
+```
 
 **`FileMakerUser`** (returned from `authorize`, stored in JWT):
-- `id`, `name`, `fmToken`, `fmTokenIssuedAt`, `projects: ProjectAssignment[]`
+- `id` (maps to `id_user`), `userName`, `nameFirst`, `nameLast`, `email`, `projects: ProjectAssignment[]`
 
 **`ProjectAssignment`** (one entry per project the user is assigned to):
-- `projectId: string`, `projectName: string`, `roles: string[]`
+- `projectId: string` (maps to `id_project`), `projectName: string` (maps to `projectName`), `roles: string[]` (maps to `roleName`)
 
-**FileMaker schema** (four tables):
-- **User** — `id_user` (PK), `user_name`, `password`, `name`, etc.
-- **Project** — `id_project` (PK), `project_name`, etc.
-- **Role** — `id_role` (PK), `role_name` (e.g. "viewer", "editor", "admin", "PI")
-- **UserProjectRole** — `id_user` (FK), `id_project` (FK), `id_role` (FK) — join table allowing a user to hold multiple roles across multiple projects
+**FileMaker schema** (four tables in IdP_Accounts.fmp12):
+- **User** — `id_user` (PK, string), `userName` (string), `nameFirst` (string), `nameLast` (string), `email` (string), `status_bool` (number, internal use only — not exposed to the auth package)
+- **Project** — `id_project` (PK, string), `projectName` (string)
+- **Role** — `id_role` (PK, string), `roleName` (string)
+- **UserProjectRole** — `id_userProjectRole` (PK), `id_user` (FK), `id_project` (FK), `id_role` (FK) — join table allowing a user to hold multiple roles across multiple projects
 
-**Error classes:** `FileMakerIdPError` (base), `FileMakerAuthError`, `ODataQueryError`, `ConfigurationError`
+> **Note:** Passwords are not stored in the User table. FileMaker handles credential validation internally via the Data API session endpoint. The `userName` field maps to the FileMaker account name used for authentication.
 
-### Step 3: Utilities
-Create shared helper functions used by the FM and OData clients — things like encoding credentials for HTTP Basic Auth and building the correct API URLs from the configuration.
+**Error classes:** `FileMakerIdPError` (base), `FileMakerAuthError`, `FileMakerQueryError`, `ConfigurationError`
+
+### Step 3: Environment config loader
+Provide a function that reads `process.env` and returns a validated `FileMakerIdPConfig`. This is the single place where env vars are mapped to config — all other modules receive the typed config object.
+
+**File:** `src/env.ts`
+
+- **`loadConfigFromEnv(overrides?): FileMakerIdPConfig`**
+  - Reads all `FM_*` env vars from `process.env`
+  - Applies sensible defaults for field names and `useHttps`
+  - Throws `ConfigurationError` if required vars (`FM_HOST`, `FM_DATABASE`, `FM_SERVICE_USERNAME`, `FM_SERVICE_PASSWORD`) are missing
+  - Accepts an optional `overrides` parameter for programmatic settings like `fetch`
+  - **Server-only:** This function reads `process.env` and must only be called in server-side code (e.g. `auth.ts`). The `"use client"` login form component must never import `loadConfigFromEnv`.
+
+**Test:** `__tests__/env.test.ts` — Set/unset env vars, test defaults, test `ConfigurationError` on missing required vars, test overrides merge
+
+### Step 4: Utilities
+Create shared helper functions used by the FM Data API client — things like encoding credentials for HTTP Basic Auth and building the correct API URLs from the configuration.
 
 **File:** `src/utils.ts`
 
 - `encodeBasicAuth(username, password)` — Base64 encode credentials
 - `buildDataApiBaseUrl(config)` — `https://{host}/fmi/data/vLatest/databases/{db}`
-- `buildODataBaseUrl(config)` — `https://{host}/fmi/odata/v4/{db}`
-- `escapeODataFieldName(name)` — Double-quote fields with special chars
 - `getFetch(config)` — Return custom or global fetch
 
-### Step 4: FileMaker Data API client
-Build the module that talks directly to FileMaker Server to verify a user's credentials. This is the core authentication step — if the username/password are valid, FileMaker returns a session token.
+### Step 5: FileMaker Data API client
+Build the module that talks directly to FileMaker Server. This handles credential validation (session endpoint), user profile + privilege lookup (Find with portal), and session management.
 
 **File:** `src/filemaker-client.ts`
 
@@ -113,6 +163,15 @@ Build the module that talks directly to FileMaker Server to verify a user's cred
   - `POST /fmi/data/vLatest/databases/{db}/sessions` with `Authorization: Basic base64(user:pass)`, body `{}`
   - Returns the session token string
   - Throws `FileMakerAuthError` on 401, `FileMakerIdPError` on network errors
+
+- **`fmFindUserWithPrivileges(config, token, username): Promise<{ profile: UserProfile, projects: ProjectAssignment[] }>`**
+  - `POST /fmi/data/vLatest/databases/{db}/layouts/{userLayout}/_find` with `Authorization: Bearer {token}`
+  - Request body: `{ "query": [{ "{usernameField}": "={username}" }], "portal": ["{portalName}"] }`
+  - Parses `response.data[0].fieldData` for profile fields (`id_user`, `nameFirst`, `nameLast`, `email`)
+  - Parses `response.data[0].portalData["{portalName}"]` for project/role assignments — portal row keys are in `TableName::fieldName` format (e.g. `"project::projectName"`, `"role::roleName"`)
+  - Groups portal rows by `projectIdField`, collecting all assigned roles per project into `ProjectAssignment[]`
+  - Returns both profile and projects in a single result
+  - Throws `FileMakerQueryError` on failure or no matching user found
 
 - **`fmLogout(config, token): Promise<void>`**
   - `DELETE /fmi/data/vLatest/databases/{db}/sessions/{token}`
@@ -122,23 +181,10 @@ Build the module that talks directly to FileMaker Server to verify a user's cred
   - `GET /fmi/data/vLatest/validateSession` with `Authorization: Bearer {token}`
   - Returns boolean
 
-**Test:** `__tests__/filemaker-client.test.ts` — Mock fetch, test success/failure/network error paths
-
-### Step 5: OData client
-Build the module that queries FileMaker via OData to look up what role and project(s) a user is assigned to. These privileges are what the web apps use to control access to pages and features.
-
-**File:** `src/odata-client.ts`
-
-- **`queryUserPrivileges(config, username, password): Promise<ProjectAssignment[]>`**
-  - Queries the `UserProjectRole` join table (via OData) filtered by the user's `id_user`, expanding/joining to `Project` and `Role` tables to resolve `project_name` and `role_name`
-  - Auth: `Authorization: Basic base64(user:pass)` (stateless, per-request)
-  - Groups results by project, collecting all assigned roles per project into `ProjectAssignment[]`
-  - Throws `ODataQueryError` on failure or no records found
-
-**Test:** `__tests__/odata-client.test.ts` — Mock fetch, test URL construction, field escaping, multi-row project collection
+**Test:** `__tests__/filemaker-client.test.ts` — Mock fetch, test login success/failure, find user with portal parsing, portal row grouping into ProjectAssignment[], no-user-found error, empty portal (user with no assignments), session validate/logout
 
 ### Step 6: Auth.js provider
-Wire the FM login and OData lookup together into an Auth.js provider — the single piece that plugs into NextAuth so it knows how to authenticate users. When a user submits their credentials, this orchestrates the full flow: verify with FM, then fetch their privileges.
+Wire the FM Data API calls together into an Auth.js provider — the single piece that plugs into NextAuth so it knows how to authenticate users. When a user submits their credentials, this orchestrates the full flow: validate credentials, then fetch their profile and privileges.
 
 **File:** `src/provider.ts`
 
@@ -146,25 +192,25 @@ Wire the FM login and OData lookup together into an Auth.js provider — the sin
   - `id: "filemaker"`, credentials fields: `username` (text), `password` (password)
   - `authorize` callback:
     1. Validate credentials exist
-    2. Call `fmLogin()` — if fails, return `null`
-    3. Call `queryUserPrivileges()` — if fails, log warning but continue with empty privileges
-    4. Return `FileMakerUser` object
+    2. Call `fmLogin(config, username, password)` — validates the user's identity; if fails, return `null`; immediately call `fmLogout(config, userToken)` (fire-and-forget, token not retained)
+    3. Call `fmLogin(config, serviceUsername, servicePassword)` — opens a service session for the profile query; if fails, return `null`
+    4. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, return `null`
+    5. Call `fmLogout(config, serviceToken)` — close the service session (fire-and-forget)
+    6. Return `FileMakerUser` object (identity + projects/roles only; no FM token stored)
 
-> **Security note:** When OData is unavailable or misconfigured, the user will be authenticated but have an empty `projects` array. This is by design — the package handles *authentication*, not *authorization*. Consuming apps **must** verify that `session.user.projects` is non-empty and contains the required roles before granting access to protected resources. Treat empty privileges as unauthorized.
+> **Security note:** The user's credentials are validated first (step 2). The profile/privilege lookup (steps 3–4) uses a separate backend service account that has read access to the User layout and UserProjectRole portal. All steps must succeed for login to proceed. The service credentials never leave the server.
 
-**Test:** `__tests__/provider.test.ts` — Mock `fmLogin` + `queryUserPrivileges`, test success/auth-failure/odata-failure paths
+**Test:** `__tests__/provider.test.ts` — Mock `fmLogin` + `fmFindUserWithPrivileges`, test success/user-auth-failure/service-auth-failure/find-failure paths
 
 ### Step 7: JWT and Session callbacks
 Control what user data gets stored in the encrypted JWT token and what gets exposed to the browser session. The key security decision here: the FM server token stays hidden server-side, while role and projects are made available to the app for access control.
 
 **File:** `src/callbacks.ts`
 
-- **`createJwtCallback(config)`** — On `signIn` trigger, copies `fmToken`, `fmTokenIssuedAt`, `projects` (array of `ProjectAssignment`) from user to JWT token
-- **`createSessionCallback(config)`** — Forwards `projects`, `id`, `name` from JWT to session. **Excludes `fmToken`** (security: must not reach client)
-- **`extractFmToken(jwt): string | null`** — Helper for server-side FM API calls
-- **`isFmTokenFresh(jwt, marginSeconds?): boolean`** — Checks 15min inactivity window
+- **`createJwtCallback(config)`** — On `signIn` trigger, copies `userName`, `nameFirst`, `nameLast`, `email`, `projects` (array of `ProjectAssignment`) from user to JWT token
+- **`createSessionCallback(config)`** — Forwards `id`, `userName`, `nameFirst`, `nameLast`, `email`, `projects` from JWT to session
 
-**Test:** `__tests__/callbacks.test.ts` — Test JWT population on signIn, session excludes fmToken, freshness check
+**Test:** `__tests__/callbacks.test.ts` — Test JWT population on signIn, session shape matches expected fields
 
 ### Step 8: Login form component
 Provide a reusable login UI component so both Monitor and Design get a consistent sign-in experience out of the box, without each app having to build its own login form.
@@ -191,7 +237,7 @@ Create the single file that defines what consumers get when they `import` from t
 
 **File:** `src/index.ts`
 
-Re-exports: `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `extractFmToken`, `isFmTokenFresh`, `fmLogin`, `fmLogout`, `fmValidateSession`, `queryUserPrivileges`, `FileMakerLoginForm`, all types, all error classes.
+Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `fmLogin`, `fmLogout`, `fmValidateSession`, `fmFindUserWithPrivileges`, `FileMakerLoginForm`, all types, all error classes.
 
 ### Step 10: CI/CD and documentation
 Set up automated publishing so that creating a GitHub release automatically builds, tests, and publishes a new version of the package to GitHub Packages. Update the README with installation and usage instructions.
@@ -209,27 +255,13 @@ Set up automated publishing so that creating a GitHub release automatically buil
 // auth.ts (in Monitor or Design app)
 import NextAuth from "next-auth";
 import {
+  loadConfigFromEnv,
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
 } from "@your-org/next-auth-filemaker-idp";
 
-const fmConfig = {
-  host: process.env.FM_HOST!,
-  database: process.env.FM_DATABASE!,
-  odata: {
-    database: process.env.FM_DATABASE!,
-    tableName: process.env.FM_ODATA_TABLE!,
-    fields: {
-      idUserField: "id_user",
-      usernameField: "user_name",
-      idProjectField: "id_project",
-      projectNameField: "project_name",
-      idRoleField: "id_role",
-      roleNameField: "role_name",
-    },
-  },
-};
+const fmConfig = loadConfigFromEnv();
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [createFileMakerProvider(fmConfig)],
@@ -240,6 +272,8 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
 });
 ```
+
+Each consuming app provides its own `.env.local` (copied from `.env.example`) with the FM connection details. No config is hardcoded in source.
 
 Apps add a `types/next-auth.d.ts` to augment Auth.js types with `projects: ProjectAssignment[]` on the Session/JWT interfaces.
 

@@ -12,13 +12,30 @@ Requires `.npmrc` configured for GitHub Packages authentication.
 
 ## 2. Set environment variables
 
-Add to `.env.local`:
+Copy `.env.example` from the package and add to `.env.local`:
 
 ```
+# ── Required ────────────────────────────────────────────────
 FM_HOST=your-filemaker-server.com
-FM_DATABASE=MonitorDB
-FM_ODATA_TABLE=UserPrivileges
+FM_DATABASE=YourDatabase
+FM_SERVICE_USERNAME=
+FM_SERVICE_PASSWORD=
 AUTH_SECRET=<random-secret>
+
+# ── Optional (defaults shown) ────────────────────────────────
+FM_USE_HTTPS=true
+FM_USER_LAYOUT=User
+
+# Field names — only set if your schema differs from defaults
+FM_FIELD_ID_USER=id_user
+FM_FIELD_USERNAME=userName
+FM_FIELD_NAME_FIRST=nameFirst
+FM_FIELD_NAME_LAST=nameLast
+FM_FIELD_EMAIL=email
+FM_PORTAL_NAME=userProjectRole
+FM_FIELD_PROJECT_ID=project::id_project
+FM_FIELD_PROJECT_NAME=project::projectName
+FM_FIELD_ROLE_NAME=role::roleName
 ```
 
 Generate `AUTH_SECRET` with:
@@ -31,29 +48,18 @@ openssl rand -base64 32
 
 ## 3. Create `auth.ts` in the app root
 
-Import the three factory functions, build your config object mapping to your app's specific FM database/table/field names, and initialize NextAuth:
+Import `loadConfigFromEnv` and the factory functions, then initialize NextAuth. All FM connection details come from env vars:
 
 ```typescript
 import NextAuth from "next-auth";
 import {
+  loadConfigFromEnv,
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
 } from "@your-org/next-auth-filemaker-idp";
 
-const fmConfig = {
-  host: process.env.FM_HOST!,
-  database: process.env.FM_DATABASE!,
-  odata: {
-    database: process.env.FM_DATABASE!,
-    tableName: process.env.FM_ODATA_TABLE!,
-    fields: {
-      usernameField: "AccountName",
-      roleField: "Role",
-      projectField: "ProjectID",
-    },
-  },
-};
+const fmConfig = loadConfigFromEnv();
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [createFileMakerProvider(fmConfig)],
@@ -76,35 +82,40 @@ export const { GET, POST } = handlers;
 
 ## 5. Add type augmentation
 
-Create `types/next-auth.d.ts` to extend the Session and JWT types with `role` and `projects` so TypeScript knows about them throughout the app:
+Create `types/next-auth.d.ts` to extend the Session and JWT types with the FileMaker user fields so TypeScript knows about them throughout the app:
 
 ```typescript
 import { DefaultSession } from "next-auth";
+import { ProjectAssignment } from "@your-org/next-auth-filemaker-idp";
 
 declare module "next-auth" {
   interface User {
-    fmToken: string;
-    fmTokenIssuedAt: number;
-    role: string;
-    projects: string[];
+    userName: string;
+    nameFirst: string;
+    nameLast: string;
+    email: string;
+    projects: ProjectAssignment[];
   }
 
   interface Session {
     user: {
       id: string;
-      name: string;
-      role: string;
-      projects: string[];
+      userName: string;
+      nameFirst: string;
+      nameLast: string;
+      email: string;
+      projects: ProjectAssignment[];
     } & DefaultSession["user"];
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    fmToken: string;
-    fmTokenIssuedAt: number;
-    role: string;
-    projects: string[];
+    userName: string;
+    nameFirst: string;
+    nameLast: string;
+    email: string;
+    projects: ProjectAssignment[];
   }
 }
 ```
@@ -112,13 +123,13 @@ declare module "next-auth/jwt" {
 ## 6. Protect routes and check privileges
 
 - Use `auth()` in server components or middleware to get the session
-- Check `session.user.role` and `session.user.projects` to gate access to pages/features
-- Use `extractFmToken()` with `getToken()` in server-side API routes if you need to make further FM Data API calls
+- Check `session.user.projects` to gate access — roles are per-project, so check both the project and the role within it
+- For server-side FM Data API calls, use `fmLogin(config, serviceUsername, servicePassword)` with the service credentials from env vars — open a session, make your calls, then `fmLogout`
 
-> **Important:** If the OData privilege lookup fails (e.g. server unreachable or misconfigured), the user will still be authenticated but `role` and `projects` will be empty. Always check that these values are present and valid before granting access — treat empty privileges as unauthorized.
+> **Note:** The user's credentials are validated first via the Data API session endpoint. Profile and privilege lookup is then performed using a backend service account (`FM_SERVICE_USERNAME`/`FM_SERVICE_PASSWORD`) that has read access to the User layout. All steps must succeed for login to proceed — service credentials never leave the server.
 
 ```typescript
-// Example: middleware.ts
+// Example: middleware.ts — redirect unauthenticated users
 import { auth } from "@/auth";
 
 export default auth((req) => {
@@ -131,17 +142,19 @@ export const config = { matcher: ["/dashboard/:path*"] };
 ```
 
 ```typescript
-// Example: checking role in a server component
+// Example: checking project-level role in a server component
 import { auth } from "@/auth";
 
-export default async function AdminPage() {
+export default async function ProjectAdminPage({ params }: { params: { projectId: string } }) {
   const session = await auth();
+  const project = session?.user.projects.find((p) => p.projectId === params.projectId);
+  const isAdmin = project?.roles.includes("admin");
 
-  if (session?.user.role !== "Admin") {
+  if (!isAdmin) {
     return <p>Access denied</p>;
   }
 
-  return <div>Admin content</div>;
+  return <div>Project admin content</div>;
 }
 ```
 
