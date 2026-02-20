@@ -73,7 +73,7 @@ Define the data shapes and configuration options that every other module depends
 - `serviceUsername` ← `FM_SERVICE_USERNAME` — Backend service account for profile/privilege queries
 - `servicePassword` ← `FM_SERVICE_PASSWORD` — Backend service account password
 - `fetch?: typeof globalThis.fetch` — Only programmatic override (not from env), for self-signed cert handling
-- `userLayout` ← `FM_USER_LAYOUT` (default `"User"`) — Data API layout name for user profile + portal
+- `userLayout` ← `FM_USER_LAYOUT` (default `"DAPI_USER"`) — Data API layout name for user profile + portal
 - `fields` — FieldMapping (see below)
 
 **`FieldMapping`** (from env vars):
@@ -99,7 +99,7 @@ FM_SERVICE_USERNAME=
 FM_SERVICE_PASSWORD=
 
 # Data API layout for user profile lookup (includes UserProjectRole portal)
-FM_USER_LAYOUT=User
+FM_USER_LAYOUT=DAPI_USER
 
 # User table fields (defaults shown — only override if your schema differs)
 FM_FIELD_ID_USER=id_user
@@ -164,7 +164,6 @@ Build the module that talks directly to FileMaker Server. This handles credentia
   - Throws `FileMakerAuthError` on 401, `FileMakerIdPError` on network errors
 
 - **`fmFindUserWithPrivileges(config, token, username): Promise<{ profile: UserProfile, projects: ProjectAssignment[] }>`**
-- **`fmFindUserWithPrivileges(config, token, username): Promise<{ profile: UserProfile, projects: ProjectAssignment[] }>`**
   - `POST /fmi/data/vLatest/databases/{db}/layouts/{userLayout}/_find` with `Authorization: Bearer {token}`
   - Request body: `{ "query": [{ "{usernameField}": "={username}" }], "portal": ["{portalName}"] }`
   - Parses `response.data[0].fieldData` for profile fields (`id_user`, `nameFirst`, `nameLast`, `email`)
@@ -177,11 +176,7 @@ Build the module that talks directly to FileMaker Server. This handles credentia
   - `DELETE /fmi/data/vLatest/databases/{db}/sessions/{token}`
   - Fire-and-forget (logs warnings, never throws)
 
-- **`fmValidateSession(config, token): Promise<boolean>`**
-  - `GET /fmi/data/vLatest/validateSession` with `Authorization: Bearer {token}`
-  - Returns boolean
-
-**Test:** `__tests__/filemaker-client.test.ts` — Mock fetch, test login success/failure, find user with portal parsing, portal row grouping into ProjectAssignment[], no-user-found error, empty portal (user with no assignments), session validate/logout
+**Test:** `__tests__/filemaker-client.test.ts` — Mock fetch, test login success/failure, find user with portal parsing, portal row grouping into ProjectAssignment[], no-user-found error, empty portal (user with no assignments), logout
 
 ### Step 6: Auth.js provider
 Wire the FM Data API calls together into an Auth.js provider — the single piece that plugs into NextAuth so it knows how to authenticate users. When a user submits their credentials, this orchestrates the full flow: validate credentials, then fetch their profile and privileges.
@@ -203,12 +198,12 @@ Wire the FM Data API calls together into an Auth.js provider — the single piec
 **Test:** `__tests__/provider.test.ts` — Mock `fmLogin` + `fmFindUserWithPrivileges`, test success/user-auth-failure/service-auth-failure/find-failure paths
 
 ### Step 7: JWT and Session callbacks
-Control what user data gets stored in the encrypted JWT token and what gets exposed to the browser session. The key security decision here: the FM server token stays hidden server-side, while role and projects are made available to the app for access control.
+Control what user data gets stored in the encrypted JWT token and what gets exposed to the browser session. Identity fields and project/role assignments are forwarded to the session for app-level access control.
 
 **File:** `src/callbacks.ts`
 
-- **`createJwtCallback(config)`** — On `signIn` trigger, copies `userName`, `nameFirst`, `nameLast`, `email`, `projects` (array of `ProjectAssignment`) from user to JWT token
-- **`createSessionCallback(config)`** — Forwards `id`, `userName`, `nameFirst`, `nameLast`, `email`, `projects` from JWT to session
+- **`createJwtCallback()`** — On `signIn` trigger, copies `userName`, `nameFirst`, `nameLast`, `email`, `projects` (array of `ProjectAssignment`) from user to JWT token
+- **`createSessionCallback()`** — Forwards `id`, `userName`, `nameFirst`, `nameLast`, `email`, `projects` from JWT to session
 
 **Test:** `__tests__/callbacks.test.ts` — Test JWT population on signIn, session shape matches expected fields
 
@@ -237,7 +232,7 @@ Create the single file that defines what consumers get when they `import` from t
 
 **File:** `src/index.ts`
 
-Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `fmLogin`, `fmLogout`, `fmValidateSession`, `fmFindUserWithPrivileges`, `FileMakerLoginForm`, all types, all error classes.
+Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `fmLogin`, `fmLogout`, `fmFindUserWithPrivileges`, `FileMakerLoginForm`, all types, all error classes.
 
 ### Step 10: CI/CD and documentation
 Set up automated publishing so that creating a GitHub release automatically builds, tests, and publishes a new version of the package to GitHub Packages. Update the README with installation and usage instructions.
@@ -266,8 +261,8 @@ const fmConfig = loadConfigFromEnv();
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
-    jwt: createJwtCallback(fmConfig),
-    session: createSessionCallback(fmConfig),
+    jwt: createJwtCallback(),
+    session: createSessionCallback(),
   },
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
 });
@@ -285,8 +280,7 @@ Apps add a `types/next-auth.d.ts` to augment Auth.js types with `projects: Proje
 2. **Typecheck:** `npm run typecheck` — no errors
 3. **Unit tests:** `npm test` — all pass with mocked fetch
 4. **Manual integration test:** Install in a test NextJS app, configure against a FM Server, verify:
-   - Login with valid credentials → session contains projects with roles
+   - Login with valid credentials → session contains `projects` with roles
    - Login with invalid credentials → redirected to error/login page
-   - Session object does NOT expose `fmToken`
-   - `extractFmToken()` works in server-side routes
+   - Session object contains only identity + projects (no FM tokens)
 5. **Publish:** Create a GitHub release → workflow publishes to GitHub Packages

@@ -24,7 +24,7 @@ AUTH_SECRET=<random-secret>
 
 # ── Optional (defaults shown) ────────────────────────────────
 FM_USE_HTTPS=true
-FM_USER_LAYOUT=User
+FM_USER_LAYOUT=DAPI_USER
 
 # Field names — only set if your schema differs from defaults
 FM_FIELD_ID_USER=id_user
@@ -64,8 +64,8 @@ const fmConfig = loadConfigFromEnv();
 export const { auth, handlers, signIn, signOut } = NextAuth({
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
-    jwt: createJwtCallback(fmConfig),
-    session: createSessionCallback(fmConfig),
+    jwt: createJwtCallback(),
+    session: createSessionCallback(),
   },
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
 });
@@ -93,7 +93,7 @@ declare module "next-auth" {
     userName: string;
     nameFirst: string;
     nameLast: string;
-    email: string;
+    // email is already declared by Auth.js as email?: string | null
     projects: ProjectAssignment[];
   }
 
@@ -103,7 +103,7 @@ declare module "next-auth" {
       userName: string;
       nameFirst: string;
       nameLast: string;
-      email: string;
+      // email is already provided by DefaultSession["user"]
       projects: ProjectAssignment[];
     } & DefaultSession["user"];
   }
@@ -114,7 +114,7 @@ declare module "next-auth/jwt" {
     userName: string;
     nameFirst: string;
     nameLast: string;
-    email: string;
+    // email is already declared by Auth.js as email?: string | null
     projects: ProjectAssignment[];
   }
 }
@@ -158,7 +158,39 @@ export default async function ProjectAdminPage({ params }: { params: { projectId
 }
 ```
 
-## 7. Add a login page
+## 7. Rate limiting
+
+Each login attempt makes multiple calls to the FileMaker Data API. Without rate limiting, brute-force attacks could overwhelm your FM server. Implement rate limiting on the login route at the application level — for example:
+
+- **Next.js middleware** — track login attempts by IP and block after a threshold
+- **Reverse proxy / WAF** — configure rate limits on `/api/auth/callback/filemaker` at the infrastructure level (e.g., Cloudflare, nginx, AWS WAF)
+- **Third-party packages** — libraries like `rate-limiter-flexible` or `upstash/ratelimit` can be added to your API route
+
+## 8. Self-signed certificates (development only)
+
+> **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
+
+If your development FileMaker server uses a self-signed certificate, Data API requests will fail with a certificate error. You can work around this by passing a custom `fetch` via the config overrides:
+
+```typescript
+// auth.ts
+import https from "node:https";
+
+const agent = new https.Agent({ rejectUnauthorized: false });
+
+const fmConfig = loadConfigFromEnv({
+  fetch: (url, init) =>
+    fetch(url, { ...init, agent } as RequestInit),
+});
+```
+
+Alternatively, you can set the `NODE_TLS_REJECT_UNAUTHORIZED` environment variable (applies globally to all HTTPS requests in the process — use with caution):
+
+```
+NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+
+## 9. Add a login page
 
 The package includes a ready-to-use login form component. You can either use it directly or build your own.
 
