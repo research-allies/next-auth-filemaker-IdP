@@ -37,7 +37,7 @@ FM_IdP_HOST=your-filemaker-server.com
 FM_IdP_DATABASE=YourDatabase.fmp12
 FM_IdP_SERVICE_USERNAME=
 FM_IdP_SERVICE_PASSWORD=
-FM_IdP_AUTH_SECRET=<random-secret>
+AUTH_SECRET=<random-secret>
 
 # ── Optional (defaults shown) ────────────────────────────────
 FM_IdP_USE_HTTPS=true
@@ -55,7 +55,7 @@ FM_IdP_FIELD_PROJECT_NAME=project::projectName
 FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
-Generate `FM_IdP_AUTH_SECRET` with:
+Generate `AUTH_SECRET` with:
 
 ```bash
 npx auth secret

@@ -49,7 +49,7 @@ FM_IdP_HOST=your-filemaker-server.com
 FM_IdP_DATABASE=IdP_Accounts
 FM_IdP_SERVICE_USERNAME=acct_dapi
 FM_IdP_SERVICE_PASSWORD=<service-account-password>
-FM_IdP_AUTH_SECRET=<random-secret>   # generate: openssl rand -base64 32
+AUTH_SECRET=<random-secret>           # generate: openssl rand -base64 32
 
 # Optional — defaults shown
 FM_IdP_USE_HTTPS=true
@@ -225,7 +225,7 @@ export default async function AdminPage({ params }: { params: { projectId: strin
 | `FM_IdP_DATABASE` | ✅ | — | Database name |
 | `FM_IdP_SERVICE_USERNAME` | ✅ | — | Service account for profile queries |
 | `FM_IdP_SERVICE_PASSWORD` | ✅ | — | Service account password |
-| `FM_IdP_AUTH_SECRET` | ✅ | — | Auth.js encryption secret |
+| `AUTH_SECRET` | ✅ | — | Auth.js encryption secret (standard NextAuth env var) |
 | `FM_IdP_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
 | `FM_IdP_USER_LAYOUT` | | `DAPI_USER` | Layout name for user profile + portal |
 | `FM_IdP_TIMEOUT` | | `10000` | Request timeout in ms |
