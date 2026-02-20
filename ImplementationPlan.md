@@ -237,6 +237,85 @@ Create the single file that defines what consumers get when they `import` from t
 
 Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `fmLogin`, `fmLogout`, `fmFindUserWithPrivileges`, `FileMakerLoginForm`, all types, all error classes.
 
+### Step 11: Event logging to FileMaker
+
+Write Auth.js sign-in, sign-out, and failed sign-in events to the `DAPI_EVENTLOG` layout in FileMaker, giving administrators a server-side audit trail of authentication activity.
+
+**Key decisions:**
+- Fire-and-forget — event writes never block or throw; failures are logged as warnings only
+- Successful sign-in and sign-out are handled via Auth.js `events` hooks
+- **Failed sign-in is handled inside the provider's `authorize` callback** (Auth.js fires no event for failures) — `createFileMakerProvider` must accept the config for logging
+- Each event opens its own service session (login → create record → logout), since provider sessions are already closed by the time Auth.js events fire
+- Opt-in via `FM_IdP_EVENT_LOG_LAYOUT` env var (default `"DAPI_EVENTLOG"`). If omitted or empty, event logging is disabled
+
+**New env var (add to `.env.example`):**
+```
+FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG   # omit or leave blank to disable event logging
+```
+
+**`FileMakerIdPConfig` changes** (`src/types.ts`):
+- Add `eventLogLayout?: string` — layout name for event log writes; `undefined` disables logging
+
+**`loadConfigFromEnv` changes** (`src/env.ts`):
+- Read `FM_IdP_EVENT_LOG_LAYOUT`; if set, assign to `eventLogLayout`; if absent, leave `undefined`
+
+**New type: `EventLogEntry`** (`src/types.ts`):
+```typescript
+interface EventLogEntry {
+  scriptName: string;    // event type: "signIn", "signOut", "signInFailed"
+  detail?: string;       // human-readable description
+  error?: string;        // error message on failure
+  foreignKeyId?: string; // user ID (fk_ForeignKeyID)
+  notes?: string;        // additional context
+}
+```
+
+**New function: `fmWriteEventLog`** (`src/filemaker-client.ts`):
+```typescript
+fmWriteEventLog(config, entry: EventLogEntry): Promise<void>
+```
+- If `config.eventLogLayout` is undefined, returns immediately (no-op)
+- Opens service session (`fmLogin`), POSTs a new record to the event log layout, closes session (`fmLogout`)
+- POST body maps `EventLogEntry` fields to FM field names:
+  - `entry.scriptName` → `Script_Name`
+  - `entry.detail` → `Detail`
+  - `entry.error` → `Error`
+  - `entry.foreignKeyId` → `fk_ForeignKeyID`
+  - `entry.notes` → `Notes`
+- Fire-and-forget: `console.warn` on any failure, never throws
+
+**New factory: `createEventHandlers`** (`src/callbacks.ts`):
+```typescript
+createEventHandlers(config): { signIn, signOut }
+```
+- Returns Auth.js event handlers for use in the NextAuth `events` config
+- `signIn({ user })` — writes `{ scriptName: "signIn", foreignKeyId: user.id, detail: user.email }`
+- `signOut({ token })` — writes `{ scriptName: "signOut", foreignKeyId: token?.id }`
+
+**Provider changes** (`src/provider.ts`):
+- `authorize` already returns `null` on failure; add fire-and-forget `fmWriteEventLog` calls before each `return null`:
+  - User credential failure → `{ scriptName: "signInFailed", detail: username, error: "Invalid credentials" }`
+  - Service account failure → `{ scriptName: "signInFailed", detail: username, error: "Service account error" }`
+  - Profile lookup failure → `{ scriptName: "signInFailed", detail: username, error: "Profile lookup failed" }`
+
+**`src/index.ts`:** Export `createEventHandlers` and `EventLogEntry` type
+
+**Integration example** (update `IntegrationProc.md` Step 5):
+```typescript
+export const { auth, handlers, signIn, signOut } = NextAuth({
+  ...authConfig,
+  providers: [createFileMakerProvider(fmConfig)],
+  callbacks: {
+    jwt: createJwtCallback(),
+    session: createSessionCallback(),
+  },
+  events: createEventHandlers(fmConfig),
+  session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 5 * 60 },
+});
+```
+
+**Tests:** `__tests__/filemaker-client.test.ts` — `fmWriteEventLog` no-op when layout undefined, record creation success, warning on failure; `__tests__/callbacks.test.ts` — `createEventHandlers` returns correct payload shapes; `__tests__/provider.test.ts` — verify `fmWriteEventLog` is called on each failure path
+
 ### Step 10: CI/CD and documentation
 Set up automated publishing so that creating a GitHub release automatically builds, tests, and publishes a new version of the package to GitHub Packages. Update the README with installation and usage instructions.
 
