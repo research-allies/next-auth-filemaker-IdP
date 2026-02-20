@@ -1,10 +1,13 @@
+"use client";
+
+import type { ReactNode } from "react";
 import { signOut } from "next-auth/react";
 
 export interface FileMakerSignOutButtonProps {
   /** Where to redirect after sign out. Defaults to `/login`. */
   callbackUrl?: string;
   /** Button label or custom children. Defaults to "Sign out". */
-  children?: React.ReactNode;
+  children?: ReactNode;
   /** CSS class applied to the `<button>` element. */
   className?: string;
 }
