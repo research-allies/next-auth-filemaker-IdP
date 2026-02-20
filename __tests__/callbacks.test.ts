@@ -1,0 +1,120 @@
+import { describe, it, expect } from "vitest";
+import {
+  createJwtCallback,
+  createSessionCallback,
+} from "../src/callbacks.js";
+import type { FileMakerJWT } from "../src/callbacks.js";
+import type { ProjectAssignment } from "../src/types.js";
+
+const projects: ProjectAssignment[] = [
+  { projectId: "p1", projectName: "Monitor", roles: ["admin", "editor"] },
+  { projectId: "p2", projectName: "Design", roles: ["viewer"] },
+];
+
+const fmUser = {
+  id: "u001",
+  userName: "jdoe",
+  nameFirst: "John",
+  nameLast: "Doe",
+  email: "jdoe@example.com",
+  projects,
+};
+
+// ─── JWT Callback ──────────────────────────────────────────────────────────
+
+describe("createJwtCallback", () => {
+  it("populates token from user on signIn", () => {
+    const jwt = createJwtCallback();
+    const token = jwt({ token: {} as FileMakerJWT, user: fmUser });
+
+    expect(token.id).toBe("u001");
+    expect(token.userName).toBe("jdoe");
+    expect(token.nameFirst).toBe("John");
+    expect(token.nameLast).toBe("Doe");
+    expect(token.email).toBe("jdoe@example.com");
+    expect(token.projects).toEqual(projects);
+  });
+
+  it("returns token unchanged when no user (subsequent requests)", () => {
+    const jwt = createJwtCallback();
+    const existingToken: FileMakerJWT = {
+      id: "u001",
+      userName: "jdoe",
+      nameFirst: "John",
+      nameLast: "Doe",
+      email: "jdoe@example.com",
+      projects,
+    };
+    const result = jwt({ token: existingToken });
+
+    expect(result).toEqual(existingToken);
+  });
+
+  it("preserves other token fields when user is present", () => {
+    const jwt = createJwtCallback();
+    const token = jwt({
+      token: { sub: "auth-sub-123" } as FileMakerJWT,
+      user: fmUser,
+    });
+
+    expect(token.sub).toBe("auth-sub-123");
+    expect(token.id).toBe("u001");
+  });
+});
+
+// ─── Session Callback ──────────────────────────────────────────────────────
+
+describe("createSessionCallback", () => {
+  const baseSession = {
+    expires: "2030-01-01T00:00:00.000Z",
+    user: { name: null, email: null, image: null },
+  };
+
+  it("populates session.user from JWT token", () => {
+    const sessionCb = createSessionCallback();
+    const token: FileMakerJWT = {
+      id: "u001",
+      userName: "jdoe",
+      nameFirst: "John",
+      nameLast: "Doe",
+      email: "jdoe@example.com",
+      projects,
+    };
+
+    const result = sessionCb({ session: baseSession, token });
+
+    expect(result.user.id).toBe("u001");
+    expect(result.user.userName).toBe("jdoe");
+    expect(result.user.nameFirst).toBe("John");
+    expect(result.user.nameLast).toBe("Doe");
+    expect(result.user.email).toBe("jdoe@example.com");
+    expect(result.user.projects).toEqual(projects);
+  });
+
+  it("preserves session.expires", () => {
+    const sessionCb = createSessionCallback();
+    const token: FileMakerJWT = {
+      id: "u001",
+      userName: "jdoe",
+      nameFirst: "John",
+      nameLast: "Doe",
+      email: "jdoe@example.com",
+      projects: [],
+    };
+
+    const result = sessionCb({ session: baseSession, token });
+    expect(result.expires).toBe("2030-01-01T00:00:00.000Z");
+  });
+
+  it("uses empty defaults when token fields are missing", () => {
+    const sessionCb = createSessionCallback();
+    const result = sessionCb({
+      session: baseSession,
+      token: {} as FileMakerJWT,
+    });
+
+    expect(result.user.id).toBe("");
+    expect(result.user.userName).toBe("");
+    expect(result.user.projects).toEqual([]);
+  });
+});

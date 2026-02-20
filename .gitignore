@@ -1,6 +1,7 @@
 # Build output
 dist/
 *.tsbuildinfo
+*.tgz
 
 # Dependencies
 node_modules/

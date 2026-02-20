@@ -2,22 +2,39 @@
 
 Outline of steps needed to deploy the package in a NextJS App
 
-## 1. Install the package
+## 1. Configure `.npmrc` for GitHub Packages
 
-```bash
-npm install @your-org/next-auth-filemaker-idp
+The package is published to GitHub Packages. Add an `.npmrc` in the consuming app root (or your global `~/.npmrc`) with a GitHub Personal Access Token:
+
+```
+@research-allies:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT
 ```
 
-Requires `.npmrc` configured for GitHub Packages authentication.
+The PAT needs `read:packages` scope.
 
-## 2. Set environment variables
+## 2. Install the package
+
+```bash
+npm install @research-allies/next-auth-filemaker-idp
+```
+
+> **Local development tip:** When testing against a local build of the package, use `npm pack` to create a tarball and install from that rather than a `file:` or symlink install — Turbopack cannot resolve symlinks:
+> ```bash
+> # In the IdP package directory
+> npm run build && npm pack
+> # In the consuming app
+> npm install ../next-auth-filemaker-IdP/research-allies-next-auth-filemaker-idp-0.1.0.tgz
+> ```
+
+## 3. Set environment variables
 
 Copy `.env.example` from the package and add to `.env.local`:
 
 ```
 # ── Required ────────────────────────────────────────────────
 FM_HOST=your-filemaker-server.com
-FM_DATABASE=YourDatabase
+FM_DATABASE=YourDatabase.fmp12
 FM_SERVICE_USERNAME=
 FM_SERVICE_PASSWORD=
 AUTH_SECRET=<random-secret>
@@ -46,22 +63,44 @@ npx auth secret
 openssl rand -base64 32
 ```
 
-## 3. Create `auth.ts` in the app root
+## 4. Create `auth.config.ts` (edge-safe, no Node.js APIs)
 
-Import `loadConfigFromEnv` and the factory functions, then initialize NextAuth. All FM connection details come from env vars:
+This minimal config is used by the middleware/proxy (edge runtime). It must not import any Node.js APIs or the FM package:
 
 ```typescript
+// src/auth.config.ts
+import type { NextAuthConfig } from "next-auth";
+
+export const authConfig = {
+  pages: { signIn: "/login" },
+  callbacks: {
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
+  },
+  providers: [],
+} satisfies NextAuthConfig;
+```
+
+## 5. Create `auth.ts` (server-only, full config)
+
+Import `loadConfigFromEnv` and the factory functions. Spread `authConfig` so pages/callbacks are shared:
+
+```typescript
+// src/auth.ts
 import NextAuth from "next-auth";
 import {
   loadConfigFromEnv,
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-} from "@your-org/next-auth-filemaker-idp";
+} from "@research-allies/next-auth-filemaker-idp";
+import { authConfig } from "@/auth.config";
 
 const fmConfig = loadConfigFromEnv();
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
     jwt: createJwtCallback(),
@@ -71,7 +110,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 });
 ```
 
-## 4. Wire up the API route handler
+## 6. Wire up the API route handler
 
 Create `app/api/auth/[...nextauth]/route.ts` that re-exports the handlers:
 
@@ -80,13 +119,13 @@ import { handlers } from "@/auth";
 export const { GET, POST } = handlers;
 ```
 
-## 5. Add type augmentation
+## 7. Add type augmentation
 
-Create `types/next-auth.d.ts` to extend the Session and JWT types with the FileMaker user fields so TypeScript knows about them throughout the app:
+Create `types/next-auth.d.ts` to extend the Session and JWT types with the FileMaker user fields:
 
 ```typescript
 import { DefaultSession } from "next-auth";
-import { ProjectAssignment } from "@your-org/next-auth-filemaker-idp";
+import { ProjectAssignment } from "@research-allies/next-auth-filemaker-idp";
 
 declare module "next-auth" {
   interface User {
@@ -120,29 +159,45 @@ declare module "next-auth/jwt" {
 }
 ```
 
-## 6. Protect routes and check privileges
+## 8. Protect routes with middleware
 
-- Use `auth()` in server components or middleware to get the session
-- Check `session.user.projects` to gate access — roles are per-project, so check both the project and the role within it
-- For server-side FM Data API calls, use `fmLogin(config, serviceUsername, servicePassword)` with the service credentials from env vars — open a session, make your calls, then `fmLogout`
+### Next.js 16+: use `proxy.ts`
 
-> **Note:** The user's credentials are validated first via the Data API session endpoint. Profile and privilege lookup is then performed using a backend service account (`FM_SERVICE_USERNAME`/`FM_SERVICE_PASSWORD`) that has read access to the User layout. All steps must succeed for login to proceed — service credentials never leave the server.
+Next.js 16 renamed `middleware.ts` to `proxy.ts`. Use the edge-safe `authConfig` (not the full `auth.ts`):
 
 ```typescript
-// Example: middleware.ts — redirect unauthenticated users
-import { auth } from "@/auth";
+// src/proxy.ts
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 
-export default auth((req) => {
-  if (!req.auth) {
-    return Response.redirect(new URL("/login", req.url));
-  }
-});
+export default NextAuth(authConfig).auth;
 
-export const config = { matcher: ["/dashboard/:path*"] };
+export const config = {
+  matcher: [
+    "/dashboard/:path*",
+    // Add other protected paths
+    "/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
 ```
 
+### Next.js 15 and earlier: use `middleware.ts`
+
 ```typescript
-// Example: checking project-level role in a server component
+// src/middleware.ts
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
+
+export default NextAuth(authConfig).auth;
+
+export const config = {
+  matcher: ["/dashboard/:path*"],
+};
+```
+
+### Checking project-level roles in server components
+
+```typescript
 import { auth } from "@/auth";
 
 export default async function ProjectAdminPage({ params }: { params: { projectId: string } }) {
@@ -158,49 +213,18 @@ export default async function ProjectAdminPage({ params }: { params: { projectId
 }
 ```
 
-## 7. Rate limiting
-
-Each login attempt makes multiple calls to the FileMaker Data API. Without rate limiting, brute-force attacks could overwhelm your FM server. Implement rate limiting on the login route at the application level — for example:
-
-- **Next.js middleware** — track login attempts by IP and block after a threshold
-- **Reverse proxy / WAF** — configure rate limits on `/api/auth/callback/filemaker` at the infrastructure level (e.g., Cloudflare, nginx, AWS WAF)
-- **Third-party packages** — libraries like `rate-limiter-flexible` or `upstash/ratelimit` can be added to your API route
-
-## 8. Self-signed certificates (development only)
-
-> **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
-
-If your development FileMaker server uses a self-signed certificate, Data API requests will fail with a certificate error. You can work around this by passing a custom `fetch` via the config overrides:
-
-```typescript
-// auth.ts
-import https from "node:https";
-
-const agent = new https.Agent({ rejectUnauthorized: false });
-
-const fmConfig = loadConfigFromEnv({
-  fetch: (url, init) =>
-    fetch(url, { ...init, agent } as RequestInit),
-});
-```
-
-Alternatively, you can set the `NODE_TLS_REJECT_UNAUTHORIZED` environment variable (applies globally to all HTTPS requests in the process — use with caution):
-
-```
-NODE_TLS_REJECT_UNAUTHORIZED=0
-```
-
 ## 9. Add a login page
 
 The package includes a ready-to-use login form component. You can either use it directly or build your own.
 
 ### Option A: Use the included `FileMakerLoginForm` component
 
-The simplest approach — drop the provided component into a page:
+Import from the `/client` subpath. The login page must be a Client Component (`"use client"`):
 
 ```typescript
 // app/login/page.tsx
-import { FileMakerLoginForm } from "@your-org/next-auth-filemaker-idp";
+"use client";
+import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp/client";
 
 export default function LoginPage() {
   return (
@@ -216,6 +240,8 @@ The component accepts optional props:
 - `callbackUrl` — Where to redirect after successful login (default: `/`)
 - `className` — CSS class for the outer `<form>` element
 - `onError` — Callback for custom error handling
+
+> **Why `/client`?** The `FileMakerLoginForm` uses React hooks (`useState`). It is published under the `./client` subpath export so bundlers can correctly resolve the `"use client"` boundary. Importing from the main package path will cause a Server Component error.
 
 ### Option B: Build a custom login page
 
@@ -249,3 +275,31 @@ export default function LoginPage() {
   );
 }
 ```
+
+## 10. Rate limiting
+
+Each login attempt makes multiple calls to the FileMaker Data API. Without rate limiting, brute-force attacks could overwhelm your FM server. Implement rate limiting on the login route at the application level — for example:
+
+- **Middleware/proxy** — track login attempts by IP and block after a threshold
+- **Reverse proxy / WAF** — configure rate limits on `/api/auth/callback/filemaker` at the infrastructure level (e.g., Cloudflare, nginx, AWS WAF)
+- **Third-party packages** — libraries like `rate-limiter-flexible` or `upstash/ratelimit` can be added to your API route
+
+## 11. Self-signed certificates (development only)
+
+> **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
+
+If your development FileMaker server uses a self-signed certificate, Data API requests will fail with a certificate error. You can work around this by passing a custom `fetch` via the config overrides:
+
+```typescript
+// auth.ts
+import https from "node:https";
+
+const agent = new https.Agent({ rejectUnauthorized: false });
+
+const fmConfig = loadConfigFromEnv({
+  fetch: (url, init) =>
+    fetch(url, { ...init, agent } as RequestInit),
+});
+```
+
+Alternatively, set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local` (applies globally — use with caution).
