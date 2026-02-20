@@ -275,7 +275,34 @@ export default function LoginPage() {
 }
 ```
 
-## 10. Rate limiting
+## 10. Add a sign-out action
+
+Call `signOut` from `next-auth/react` directly in any Client Component:
+
+```typescript
+"use client";
+import { signOut } from "next-auth/react";
+
+// Minimal button
+<button onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
+
+// With a design-system component (e.g. MUI)
+<IconButton onClick={() => signOut({ callbackUrl: "/login" })}>
+  <LogoutIcon />
+</IconButton>
+```
+
+For server-side sign-out (e.g. from a Server Action), import `signOut` from `@/auth` instead:
+
+```typescript
+import { signOut } from "@/auth";
+
+export async function signOutAction() {
+  await signOut({ redirectTo: "/login" });
+}
+```
+
+## 11. Rate limiting
 
 Each login attempt makes multiple calls to the FileMaker Data API. Without rate limiting, brute-force attacks could overwhelm your FM server. Implement rate limiting on the login route at the application level — for example:
 
@@ -283,7 +310,7 @@ Each login attempt makes multiple calls to the FileMaker Data API. Without rate 
 - **Reverse proxy / WAF** — configure rate limits on `/api/auth/callback/filemaker` at the infrastructure level (e.g., Cloudflare, nginx, AWS WAF)
 - **Third-party packages** — libraries like `rate-limiter-flexible` or `upstash/ratelimit` can be added to your API route
 
-## 11. Self-signed certificates (development only)
+## 12. Self-signed certificates (development only)
 
 > **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
 
