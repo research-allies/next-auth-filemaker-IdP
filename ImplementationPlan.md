@@ -67,52 +67,55 @@ Define the data shapes and configuration options that every other module depends
 **Files:** `src/types.ts`, `src/errors.ts`
 
 **`FileMakerIdPConfig`** (built from environment variables via `loadConfigFromEnv()`):
-- `host` ← `FM_HOST` — FM Server hostname
-- `database` ← `FM_DATABASE` — Database name for Data API
-- `useHttps` ← `FM_USE_HTTPS` (default `true`)
-- `serviceUsername` ← `FM_SERVICE_USERNAME` — Backend service account for profile/privilege queries
-- `servicePassword` ← `FM_SERVICE_PASSWORD` — Backend service account password
+- `host` ← `FM_IdP_HOST` — FM Server hostname
+- `database` ← `FM_IdP_DATABASE` — Database name for Data API
+- `useHttps` ← `FM_IdP_USE_HTTPS` (default `true`)
+- `serviceUsername` ← `FM_IdP_SERVICE_USERNAME` — Backend service account for profile/privilege queries
+- `servicePassword` ← `FM_IdP_SERVICE_PASSWORD` — Backend service account password
 - `fetch?: typeof globalThis.fetch` — Only programmatic override (not from env), for self-signed cert handling
-- `userLayout` ← `FM_USER_LAYOUT` (default `"DAPI_USER"`) — Data API layout name for user profile + portal
+- `userLayout` ← `FM_IdP_USER_LAYOUT` (default `"DAPI_USER"`) — Data API layout name for user profile + portal
 - `fields` — FieldMapping (see below)
 
 **`FieldMapping`** (from env vars):
-- `idUserField` ← `FM_FIELD_ID_USER` (default `"id_user"`) — PK on User table
-- `usernameField` ← `FM_FIELD_USERNAME` (default `"userName"`) — used in Find query
-- `nameFirstField` ← `FM_FIELD_NAME_FIRST` (default `"nameFirst"`)
-- `nameLastField` ← `FM_FIELD_NAME_LAST` (default `"nameLast"`)
-- `emailField` ← `FM_FIELD_EMAIL` (default `"email"`)
-- `portalName` ← `FM_PORTAL_NAME` (default `"userProjectRole"`) — portal name on the User layout (case-sensitive, matches FM relationship name)
-- `projectIdField` ← `FM_FIELD_PROJECT_ID` (default `"project::id_project"`) — portal field, `TableName::fieldName` format
-- `projectNameField` ← `FM_FIELD_PROJECT_NAME` (default `"project::projectName"`) — portal field, `TableName::fieldName` format
-- `roleNameField` ← `FM_FIELD_ROLE_NAME` (default `"role::roleName"`) — portal field, `TableName::fieldName` format
+- `idUserField` ← `FM_IdP_FIELD_ID_USER` (default `"id_user"`) — PK on User table
+- `usernameField` ← `FM_IdP_FIELD_USERNAME` (default `"userName"`) — used in Find query
+- `nameFirstField` ← `FM_IdP_FIELD_NAME_FIRST` (default `"nameFirst"`)
+- `nameLastField` ← `FM_IdP_FIELD_NAME_LAST` (default `"nameLast"`)
+- `emailField` ← `FM_IdP_FIELD_EMAIL` (default `"email"`)
+- `portalName` ← `FM_IdP_PORTAL_NAME` (default `"userProjectRole"`) — portal name on the User layout (case-sensitive, matches FM relationship name)
+- `projectIdField` ← `FM_IdP_FIELD_PROJECT_ID` (default `"project::id_project"`) — portal field, `TableName::fieldName` format
+- `projectNameField` ← `FM_IdP_FIELD_PROJECT_NAME` (default `"project::projectName"`) — portal field, `TableName::fieldName` format
+- `roleNameField` ← `FM_IdP_FIELD_ROLE_NAME` (default `"role::roleName"`) — portal field, `TableName::fieldName` format
 
 **`.env.example`** (shipped with the package as a reference):
 ```
 # FileMaker Server connection
-FM_HOST=fm.example.com
-FM_DATABASE=IdP_Accounts
-FM_USE_HTTPS=true
+FM_IdP_HOST=fm.example.com
+FM_IdP_DATABASE=IdP_Accounts
+FM_IdP_USE_HTTPS=true
 
 # Service account for backend profile/privilege queries (not the end user's credentials)
-FM_SERVICE_USERNAME=
-FM_SERVICE_PASSWORD=
+FM_IdP_SERVICE_USERNAME=
+FM_IdP_SERVICE_PASSWORD=
+
+# Auth.js secret (generate with: openssl rand -base64 32)
+FM_IdP_AUTH_SECRET=
 
 # Data API layout for user profile lookup (includes UserProjectRole portal)
-FM_USER_LAYOUT=DAPI_USER
+FM_IdP_USER_LAYOUT=DAPI_USER
 
 # User table fields (defaults shown — only override if your schema differs)
-FM_FIELD_ID_USER=id_user
-FM_FIELD_USERNAME=userName
-FM_FIELD_NAME_FIRST=nameFirst
-FM_FIELD_NAME_LAST=nameLast
-FM_FIELD_EMAIL=email
+FM_IdP_FIELD_ID_USER=id_user
+FM_IdP_FIELD_USERNAME=userName
+FM_IdP_FIELD_NAME_FIRST=nameFirst
+FM_IdP_FIELD_NAME_LAST=nameLast
+FM_IdP_FIELD_EMAIL=email
 
 # UserProjectRole portal fields (portal rows use TableName::fieldName format)
-FM_PORTAL_NAME=userProjectRole
-FM_FIELD_PROJECT_ID=project::id_project
-FM_FIELD_PROJECT_NAME=project::projectName
-FM_FIELD_ROLE_NAME=role::roleName
+FM_IdP_PORTAL_NAME=userProjectRole
+FM_IdP_FIELD_PROJECT_ID=project::id_project
+FM_IdP_FIELD_PROJECT_NAME=project::projectName
+FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
 **`FileMakerUser`** (returned from `authorize`, stored in JWT):
@@ -137,9 +140,9 @@ Provide a function that reads `process.env` and returns a validated `FileMakerId
 **File:** `src/env.ts`
 
 - **`loadConfigFromEnv(overrides?): FileMakerIdPConfig`**
-  - Reads all `FM_*` env vars from `process.env`
+  - Reads all `FM_IdP_*` env vars from `process.env`
   - Applies sensible defaults for field names and `useHttps`
-  - Throws `ConfigurationError` if required vars (`FM_HOST`, `FM_DATABASE`, `FM_SERVICE_USERNAME`, `FM_SERVICE_PASSWORD`) are missing
+  - Throws `ConfigurationError` if required vars (`FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, `FM_IdP_SERVICE_PASSWORD`) are missing
   - Accepts an optional `overrides` parameter for programmatic settings like `fetch`
   - **⚠️ SECURITY: Server-only function** — This function reads `process.env` (including service account credentials) and **must only be called in server-side code** (e.g. `auth.ts`). Never import or call `loadConfigFromEnv` from client components or any code marked with `"use client"`. Doing so would expose service credentials to the browser.
 **Test:** `__tests__/env.test.ts` — Set/unset env vars, test defaults, test `ConfigurationError` on missing required vars, test overrides merge

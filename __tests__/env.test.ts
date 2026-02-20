@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfigFromEnv } from "../src/env.js";
 import { ConfigurationError } from "../src/errors.js";
 
 const REQUIRED_ENV = {
-  FM_HOST: "fm.example.com",
-  FM_DATABASE: "IdP_Accounts",
-  FM_SERVICE_USERNAME: "svc_user",
-  FM_SERVICE_PASSWORD: "svc_pass",
+  FM_IdP_HOST: "fm.example.com",
+  FM_IdP_DATABASE: "IdP_Accounts",
+  FM_IdP_SERVICE_USERNAME: "svc_user",
+  FM_IdP_SERVICE_PASSWORD: "svc_pass",
 };
 
 function setEnv(vars: Record<string, string>) {
@@ -17,22 +17,22 @@ function setEnv(vars: Record<string, string>) {
 
 function clearEnv() {
   const ALL_VARS = [
-    "FM_HOST",
-    "FM_DATABASE",
-    "FM_SERVICE_USERNAME",
-    "FM_SERVICE_PASSWORD",
-    "FM_USE_HTTPS",
-    "FM_USER_LAYOUT",
-    "FM_TIMEOUT",
-    "FM_FIELD_ID_USER",
-    "FM_FIELD_USERNAME",
-    "FM_FIELD_NAME_FIRST",
-    "FM_FIELD_NAME_LAST",
-    "FM_FIELD_EMAIL",
-    "FM_PORTAL_NAME",
-    "FM_FIELD_PROJECT_ID",
-    "FM_FIELD_PROJECT_NAME",
-    "FM_FIELD_ROLE_NAME",
+    "FM_IdP_HOST",
+    "FM_IdP_DATABASE",
+    "FM_IdP_SERVICE_USERNAME",
+    "FM_IdP_SERVICE_PASSWORD",
+    "FM_IdP_USE_HTTPS",
+    "FM_IdP_USER_LAYOUT",
+    "FM_IdP_TIMEOUT",
+    "FM_IdP_FIELD_ID_USER",
+    "FM_IdP_FIELD_USERNAME",
+    "FM_IdP_FIELD_NAME_FIRST",
+    "FM_IdP_FIELD_NAME_LAST",
+    "FM_IdP_FIELD_EMAIL",
+    "FM_IdP_PORTAL_NAME",
+    "FM_IdP_FIELD_PROJECT_ID",
+    "FM_IdP_FIELD_PROJECT_NAME",
+    "FM_IdP_FIELD_ROLE_NAME",
   ];
   for (const k of ALL_VARS) {
     delete process.env[k];
@@ -71,14 +71,14 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.roleNameField).toBe("role::roleName");
   });
 
-  it("respects FM_USE_HTTPS=false", () => {
-    setEnv({ ...REQUIRED_ENV, FM_USE_HTTPS: "false" });
+  it("respects FM_IdP_USE_HTTPS=false", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_USE_HTTPS: "false" });
     const config = loadConfigFromEnv();
     expect(config.useHttps).toBe(false);
   });
 
-  it("respects custom FM_TIMEOUT", () => {
-    setEnv({ ...REQUIRED_ENV, FM_TIMEOUT: "5000" });
+  it("respects custom FM_IdP_TIMEOUT", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_TIMEOUT: "5000" });
     const config = loadConfigFromEnv();
     expect(config.timeout).toBe(5000);
   });
@@ -86,13 +86,13 @@ describe("loadConfigFromEnv", () => {
   it("respects custom field name overrides", () => {
     setEnv({
       ...REQUIRED_ENV,
-      FM_USER_LAYOUT: "MY_USER_LAYOUT",
-      FM_FIELD_ID_USER: "my_id",
-      FM_FIELD_USERNAME: "myUserName",
-      FM_PORTAL_NAME: "myPortal",
-      FM_FIELD_PROJECT_ID: "proj::id",
-      FM_FIELD_PROJECT_NAME: "proj::name",
-      FM_FIELD_ROLE_NAME: "myRole::name",
+      FM_IdP_USER_LAYOUT: "MY_USER_LAYOUT",
+      FM_IdP_FIELD_ID_USER: "my_id",
+      FM_IdP_FIELD_USERNAME: "myUserName",
+      FM_IdP_PORTAL_NAME: "myPortal",
+      FM_IdP_FIELD_PROJECT_ID: "proj::id",
+      FM_IdP_FIELD_PROJECT_NAME: "proj::name",
+      FM_IdP_FIELD_ROLE_NAME: "myRole::name",
     });
     const config = loadConfigFromEnv();
     expect(config.userLayout).toBe("MY_USER_LAYOUT");
@@ -104,14 +104,14 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.roleNameField).toBe("myRole::name");
   });
 
-  it("throws ConfigurationError when FM_HOST is missing", () => {
+  it("throws ConfigurationError when FM_IdP_HOST is missing", () => {
     setEnv({
-      FM_DATABASE: "IdP_Accounts",
-      FM_SERVICE_USERNAME: "svc",
-      FM_SERVICE_PASSWORD: "pass",
+      FM_IdP_DATABASE: "IdP_Accounts",
+      FM_IdP_SERVICE_USERNAME: "svc",
+      FM_IdP_SERVICE_PASSWORD: "pass",
     });
     expect(() => loadConfigFromEnv()).toThrow(ConfigurationError);
-    expect(() => loadConfigFromEnv()).toThrow("FM_HOST");
+    expect(() => loadConfigFromEnv()).toThrow("FM_IdP_HOST");
   });
 
   it("throws ConfigurationError when multiple required vars are missing", () => {
@@ -121,10 +121,10 @@ describe("loadConfigFromEnv", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(ConfigurationError);
       const configErr = err as ConfigurationError;
-      expect(configErr.missingVars).toContain("FM_HOST");
-      expect(configErr.missingVars).toContain("FM_DATABASE");
-      expect(configErr.missingVars).toContain("FM_SERVICE_USERNAME");
-      expect(configErr.missingVars).toContain("FM_SERVICE_PASSWORD");
+      expect(configErr.missingVars).toContain("FM_IdP_HOST");
+      expect(configErr.missingVars).toContain("FM_IdP_DATABASE");
+      expect(configErr.missingVars).toContain("FM_IdP_SERVICE_USERNAME");
+      expect(configErr.missingVars).toContain("FM_IdP_SERVICE_PASSWORD");
     }
   });
 
@@ -136,7 +136,7 @@ describe("loadConfigFromEnv", () => {
   });
 
   it("merges programmatic timeout override", () => {
-    setEnv({ ...REQUIRED_ENV, FM_TIMEOUT: "8000" });
+    setEnv({ ...REQUIRED_ENV, FM_IdP_TIMEOUT: "8000" });
     const config = loadConfigFromEnv({ timeout: 3000 });
     // programmatic override wins
     expect(config.timeout).toBe(3000);

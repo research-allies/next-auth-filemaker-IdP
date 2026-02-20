@@ -31,5 +31,5 @@ See `IntegrationProc.md` for consuming app integration guide.
 
 - Data API only (no OData)
 - Service account for profile/privilege queries — user token is discarded after validation
-- `FM_TIMEOUT` default: 10000ms (AbortController on all fetch calls)
+- `FM_IdP_TIMEOUT` default: 10000ms (AbortController on all fetch calls)
 - Package published to GitHub Packages under `@research-allies` scope

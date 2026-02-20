@@ -33,29 +33,29 @@ Copy `.env.example` from the package and add to `.env.local`:
 
 ```
 # ── Required ────────────────────────────────────────────────
-FM_HOST=your-filemaker-server.com
-FM_DATABASE=YourDatabase.fmp12
-FM_SERVICE_USERNAME=
-FM_SERVICE_PASSWORD=
-AUTH_SECRET=<random-secret>
+FM_IdP_HOST=your-filemaker-server.com
+FM_IdP_DATABASE=YourDatabase.fmp12
+FM_IdP_SERVICE_USERNAME=
+FM_IdP_SERVICE_PASSWORD=
+FM_IdP_AUTH_SECRET=<random-secret>
 
 # ── Optional (defaults shown) ────────────────────────────────
-FM_USE_HTTPS=true
-FM_USER_LAYOUT=DAPI_USER
+FM_IdP_USE_HTTPS=true
+FM_IdP_USER_LAYOUT=DAPI_USER
 
 # Field names — only set if your schema differs from defaults
-FM_FIELD_ID_USER=id_user
-FM_FIELD_USERNAME=userName
-FM_FIELD_NAME_FIRST=nameFirst
-FM_FIELD_NAME_LAST=nameLast
-FM_FIELD_EMAIL=email
-FM_PORTAL_NAME=userProjectRole
-FM_FIELD_PROJECT_ID=project::id_project
-FM_FIELD_PROJECT_NAME=project::projectName
-FM_FIELD_ROLE_NAME=role::roleName
+FM_IdP_FIELD_ID_USER=id_user
+FM_IdP_FIELD_USERNAME=userName
+FM_IdP_FIELD_NAME_FIRST=nameFirst
+FM_IdP_FIELD_NAME_LAST=nameLast
+FM_IdP_FIELD_EMAIL=email
+FM_IdP_PORTAL_NAME=userProjectRole
+FM_IdP_FIELD_PROJECT_ID=project::id_project
+FM_IdP_FIELD_PROJECT_NAME=project::projectName
+FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
-Generate `AUTH_SECRET` with:
+Generate `FM_IdP_AUTH_SECRET` with:
 
 ```bash
 npx auth secret
@@ -163,14 +163,13 @@ declare module "next-auth/jwt" {
 
 ### Next.js 16+: use `proxy.ts`
 
-Next.js 16 renamed `middleware.ts` to `proxy.ts`. Use the edge-safe `authConfig` (not the full `auth.ts`):
+Next.js 16 replaced `middleware.ts` with `proxy.ts`, which runs on the **Node.js runtime** (not edge). This means you can use the full `auth` export directly — no need for a separate edge-safe `authConfig`:
 
 ```typescript
 // src/proxy.ts
-import NextAuth from "next-auth";
-import { authConfig } from "@/auth.config";
+import { auth } from "@/auth";
 
-export default NextAuth(authConfig).auth;
+export default auth;
 
 export const config = {
   matcher: [

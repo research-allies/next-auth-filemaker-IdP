@@ -45,27 +45,27 @@ Copy `.env.example` (shipped with the package) into your app's `.env.local`:
 
 ```bash
 # Required
-FM_HOST=your-filemaker-server.com
-FM_DATABASE=IdP_Accounts
-FM_SERVICE_USERNAME=acct_dapi
-FM_SERVICE_PASSWORD=<service-account-password>
-AUTH_SECRET=<random-secret>   # generate: openssl rand -base64 32
+FM_IdP_HOST=your-filemaker-server.com
+FM_IdP_DATABASE=IdP_Accounts
+FM_IdP_SERVICE_USERNAME=acct_dapi
+FM_IdP_SERVICE_PASSWORD=<service-account-password>
+FM_IdP_AUTH_SECRET=<random-secret>   # generate: openssl rand -base64 32
 
 # Optional — defaults shown
-FM_USE_HTTPS=true
-FM_USER_LAYOUT=DAPI_USER
-FM_TIMEOUT=10000
+FM_IdP_USE_HTTPS=true
+FM_IdP_USER_LAYOUT=DAPI_USER
+FM_IdP_TIMEOUT=10000
 
 # Field names — only set if your schema differs from the defaults
-FM_FIELD_ID_USER=id_user
-FM_FIELD_USERNAME=userName
-FM_FIELD_NAME_FIRST=nameFirst
-FM_FIELD_NAME_LAST=nameLast
-FM_FIELD_EMAIL=email
-FM_PORTAL_NAME=userProjectRole
-FM_FIELD_PROJECT_ID=project::id_project
-FM_FIELD_PROJECT_NAME=project::projectName
-FM_FIELD_ROLE_NAME=role::roleName
+FM_IdP_FIELD_ID_USER=id_user
+FM_IdP_FIELD_USERNAME=userName
+FM_IdP_FIELD_NAME_FIRST=nameFirst
+FM_IdP_FIELD_NAME_LAST=nameLast
+FM_IdP_FIELD_EMAIL=email
+FM_IdP_PORTAL_NAME=userProjectRole
+FM_IdP_FIELD_PROJECT_ID=project::id_project
+FM_IdP_FIELD_PROJECT_NAME=project::projectName
+FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
 ### 2. `auth.ts`
@@ -221,23 +221,23 @@ export default async function AdminPage({ params }: { params: { projectId: strin
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `FM_HOST` | ✅ | — | FileMaker Server hostname |
-| `FM_DATABASE` | ✅ | — | Database name |
-| `FM_SERVICE_USERNAME` | ✅ | — | Service account for profile queries |
-| `FM_SERVICE_PASSWORD` | ✅ | — | Service account password |
-| `AUTH_SECRET` | ✅ | — | Auth.js encryption secret |
-| `FM_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
-| `FM_USER_LAYOUT` | | `DAPI_USER` | Layout name for user profile + portal |
-| `FM_TIMEOUT` | | `10000` | Request timeout in ms |
-| `FM_FIELD_ID_USER` | | `id_user` | User table PK field |
-| `FM_FIELD_USERNAME` | | `userName` | Username field (used for Find queries) |
-| `FM_FIELD_NAME_FIRST` | | `nameFirst` | First name field |
-| `FM_FIELD_NAME_LAST` | | `nameLast` | Last name field |
-| `FM_FIELD_EMAIL` | | `email` | Email field |
-| `FM_PORTAL_NAME` | | `userProjectRole` | Portal name on the user layout |
-| `FM_FIELD_PROJECT_ID` | | `project::id_project` | Portal field — project PK |
-| `FM_FIELD_PROJECT_NAME` | | `project::projectName` | Portal field — project name |
-| `FM_FIELD_ROLE_NAME` | | `role::roleName` | Portal field — role name |
+| `FM_IdP_HOST` | ✅ | — | FileMaker Server hostname |
+| `FM_IdP_DATABASE` | ✅ | — | Database name |
+| `FM_IdP_SERVICE_USERNAME` | ✅ | — | Service account for profile queries |
+| `FM_IdP_SERVICE_PASSWORD` | ✅ | — | Service account password |
+| `FM_IdP_AUTH_SECRET` | ✅ | — | Auth.js encryption secret |
+| `FM_IdP_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
+| `FM_IdP_USER_LAYOUT` | | `DAPI_USER` | Layout name for user profile + portal |
+| `FM_IdP_TIMEOUT` | | `10000` | Request timeout in ms |
+| `FM_IdP_FIELD_ID_USER` | | `id_user` | User table PK field |
+| `FM_IdP_FIELD_USERNAME` | | `userName` | Username field (used for Find queries) |
+| `FM_IdP_FIELD_NAME_FIRST` | | `nameFirst` | First name field |
+| `FM_IdP_FIELD_NAME_LAST` | | `nameLast` | Last name field |
+| `FM_IdP_FIELD_EMAIL` | | `email` | Email field |
+| `FM_IdP_PORTAL_NAME` | | `userProjectRole` | Portal name on the user layout |
+| `FM_IdP_FIELD_PROJECT_ID` | | `project::id_project` | Portal field — project PK |
+| `FM_IdP_FIELD_PROJECT_NAME` | | `project::projectName` | Portal field — project name |
+| `FM_IdP_FIELD_ROLE_NAME` | | `role::roleName` | Portal field — role name |
 
 ---
 

@@ -12,16 +12,16 @@ import type { FileMakerIdPConfig, FieldMapping } from "./types.js";
 import { ConfigurationError } from "./errors.js";
 
 const REQUIRED_VARS = [
-  "FM_HOST",
-  "FM_DATABASE",
-  "FM_SERVICE_USERNAME",
-  "FM_SERVICE_PASSWORD",
+  "FM_IdP_HOST",
+  "FM_IdP_DATABASE",
+  "FM_IdP_SERVICE_USERNAME",
+  "FM_IdP_SERVICE_PASSWORD",
 ] as const;
 
 type Overrides = Partial<Pick<FileMakerIdPConfig, "fetch" | "timeout">>;
 
 /**
- * Reads all `FM_*` environment variables from `process.env` and returns a
+ * Reads all `FM_IdP_*` environment variables from `process.env` and returns a
  * validated `FileMakerIdPConfig`. Applies sensible defaults for optional vars.
  *
  * ⚠️ Call this only in server-side code (e.g. `auth.ts`).
@@ -36,30 +36,31 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
   }
 
   const fields: FieldMapping = {
-    idUserField: process.env.FM_FIELD_ID_USER ?? "id_user",
-    usernameField: process.env.FM_FIELD_USERNAME ?? "userName",
-    nameFirstField: process.env.FM_FIELD_NAME_FIRST ?? "nameFirst",
-    nameLastField: process.env.FM_FIELD_NAME_LAST ?? "nameLast",
-    emailField: process.env.FM_FIELD_EMAIL ?? "email",
-    portalName: process.env.FM_PORTAL_NAME ?? "userProjectRole",
-    projectIdField: process.env.FM_FIELD_PROJECT_ID ?? "project::id_project",
+    idUserField: process.env.FM_IdP_FIELD_ID_USER ?? "id_user",
+    usernameField: process.env.FM_IdP_FIELD_USERNAME ?? "userName",
+    nameFirstField: process.env.FM_IdP_FIELD_NAME_FIRST ?? "nameFirst",
+    nameLastField: process.env.FM_IdP_FIELD_NAME_LAST ?? "nameLast",
+    emailField: process.env.FM_IdP_FIELD_EMAIL ?? "email",
+    portalName: process.env.FM_IdP_PORTAL_NAME ?? "userProjectRole",
+    projectIdField: process.env.FM_IdP_FIELD_PROJECT_ID ?? "project::id_project",
     projectNameField:
-      process.env.FM_FIELD_PROJECT_NAME ?? "project::projectName",
-    roleNameField: process.env.FM_FIELD_ROLE_NAME ?? "role::roleName",
+      process.env.FM_IdP_FIELD_PROJECT_NAME ?? "project::projectName",
+    roleNameField: process.env.FM_IdP_FIELD_ROLE_NAME ?? "role::roleName",
   };
 
-  const useHttps = process.env.FM_USE_HTTPS !== "false";
-  const timeout = process.env.FM_TIMEOUT
-    ? parseInt(process.env.FM_TIMEOUT, 10)
+  const useHttps = process.env.FM_IdP_USE_HTTPS !== "false";
+  const envTimeout = process.env.FM_IdP_TIMEOUT
+    ? parseInt(process.env.FM_IdP_TIMEOUT, 10)
     : 10000;
+  const timeout = Number.isNaN(envTimeout) ? 10000 : envTimeout;
 
   return {
-    host: process.env.FM_HOST!,
-    database: process.env.FM_DATABASE!,
+    host: process.env.FM_IdP_HOST!,
+    database: process.env.FM_IdP_DATABASE!,
     useHttps,
-    serviceUsername: process.env.FM_SERVICE_USERNAME!,
-    servicePassword: process.env.FM_SERVICE_PASSWORD!,
-    userLayout: process.env.FM_USER_LAYOUT ?? "DAPI_USER",
+    serviceUsername: process.env.FM_IdP_SERVICE_USERNAME!,
+    servicePassword: process.env.FM_IdP_SERVICE_PASSWORD!,
+    userLayout: process.env.FM_IdP_USER_LAYOUT ?? "DAPI_USER",
     fields,
     timeout,
     ...overrides,
