@@ -16,6 +16,14 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 | `IdP_Accounts.fmp12` | Manages identities, projects, and role assignments |
 | `IdP_File1.fmp12` | Sample solution file that receives distributed FileMaker accounts |
 
+| FileMaker files username | Password | Note |
+|---|---|---|
+| admin | admin883 | * |
+| acct_dapi | acct_dapi | * |
+
+* defaults only and must be changed before deploying to production.
+
+
 The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, and `userProjectRole` (join). All privilege sets assigned to users must have the `FM_DAPI` extended privilege enabled.
 
 ---

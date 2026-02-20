@@ -23,7 +23,7 @@ next-auth-filemaker-IdP/
 │   ├── env.ts                # loadConfigFromEnv() — reads env vars into FileMakerIdPConfig
 │   ├── errors.ts             # Custom error classes
 │   ├── utils.ts              # Base64 encoding, URL builders
-│   ├── filemaker-client.ts   # FM Data API client (login/logout/validate/find user)
+│   ├── filemaker-client.ts   # FM Data API client (login/logout/find user)
 │   ├── provider.ts           # Auth.js CredentialsProvider factory
 │   ├── callbacks.ts          # JWT + Session callback factories, token helpers
 │   └── components/

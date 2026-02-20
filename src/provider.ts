@@ -13,10 +13,17 @@ import { FileMakerAuthError } from "./errors.js";
  * 3. Find user profile + portal data (project/role assignments)
  * 4. Close service session (fire-and-forget)
  * 5. Return FileMakerUser (identity + projects only — no FM token)
+ *
+ * @param config - FileMaker IdP configuration
+ * @param options - Optional overrides (e.g. `{ id: "filemaker-2" }` for multi-server setups)
  */
-export function createFileMakerProvider(config: FileMakerIdPConfig) {
+export function createFileMakerProvider(
+  config: FileMakerIdPConfig,
+  options?: { id?: string },
+) {
+  const providerId = options?.id ?? "filemaker";
   return Credentials({
-    id: "filemaker",
+    id: providerId,
     name: "FileMaker",
     credentials: {
       username: { label: "Username", type: "text" },

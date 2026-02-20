@@ -2,6 +2,7 @@
 export type {
   FileMakerIdPConfig,
   FieldMapping,
+  UserProfile,
   FileMakerUser,
   ProjectAssignment,
 } from "./types.js";

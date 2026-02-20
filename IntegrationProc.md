@@ -101,14 +101,20 @@ const fmConfig = loadConfigFromEnv();
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
-  providers: [createFileMakerProvider(fmConfig)],
+  providers: [createFileMakerProvider(fmConfig)],  // optionally: createFileMakerProvider(fmConfig, { id: "custom-id" })
   callbacks: {
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 60,   // session expires 30 minutes after last activity
+    updateAge: 5 * 60, // re-sign the JWT at most once every 5 minutes
+  },
 });
 ```
+
+> **Session expiry:** `maxAge` sets how long the JWT lives from when it was last issued. `updateAge` controls how often Auth.js re-issues it — on each authenticated request that arrives more than `updateAge` seconds after the previous re-issue, the JWT is re-signed and the `maxAge` clock resets. This creates a sliding idle timeout: the session expires only if the user is inactive for the full `maxAge` duration.
 
 ## 6. Wire up the API route handler
 
@@ -236,6 +242,7 @@ export default function LoginPage() {
 ```
 
 The component accepts optional props:
+- `providerId` — Provider ID to sign in with (default: `"filemaker"`). Must match the `id` passed to `createFileMakerProvider`.
 - `callbackUrl` — Where to redirect after successful login (default: `/`)
 - `className` — CSS class for the outer `<form>` element
 - `onError` — Callback for custom error handling
@@ -244,7 +251,7 @@ The component accepts optional props:
 
 ### Option B: Build a custom login page
 
-If you need full control over the UI, create your own form that calls `signIn("filemaker", ...)`:
+If you need full control over the UI, create your own form that calls `signIn("filemaker", ...)` (replace `"filemaker"` with your custom ID if you set one):
 
 ```typescript
 // app/login/page.tsx

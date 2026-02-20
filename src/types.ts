@@ -9,15 +9,22 @@ export interface ProjectAssignment {
 }
 
 /**
- * The authenticated user object returned from `authorize` and stored in the JWT.
- * Contains identity fields and project/role assignments only — no FM session tokens.
+ * Identity-only fields for a FileMaker user (no project/role assignments).
+ * Returned as the `profile` field from `fmFindUserWithPrivileges`.
  */
-export interface FileMakerUser {
+export interface UserProfile {
   id: string;
   userName: string;
   nameFirst: string;
   nameLast: string;
   email: string;
+}
+
+/**
+ * The authenticated user object returned from `authorize` and stored in the JWT.
+ * Extends `UserProfile` with project/role assignments — no FM session tokens.
+ */
+export interface FileMakerUser extends UserProfile {
   projects: ProjectAssignment[];
 }
 

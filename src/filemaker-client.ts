@@ -1,4 +1,4 @@
-import type { FileMakerIdPConfig, ProjectAssignment } from "./types.js";
+import type { FileMakerIdPConfig, ProjectAssignment, UserProfile } from "./types.js";
 import {
   FileMakerAuthError,
   FileMakerQueryError,
@@ -9,6 +9,15 @@ import {
   buildDataApiBaseUrl,
   getFetch,
 } from "./utils.js";
+
+/**
+ * Creates an AbortController with a timeout. Call `clear()` in a finally block.
+ */
+function withTimeout(config: FileMakerIdPConfig) {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), config.timeout);
+  return { signal: controller.signal, clear: () => clearTimeout(timerId) };
+}
 
 interface FmSessionResponse {
   response: {
@@ -33,14 +42,6 @@ interface FmFindResponse {
   messages: Array<{ code: string; message: string }>;
 }
 
-interface UserProfile {
-  id: string;
-  userName: string;
-  nameFirst: string;
-  nameLast: string;
-  email: string;
-}
-
 /**
  * Authenticates a user against FileMaker Server via the Data API sessions endpoint.
  * Returns the session token on success.
@@ -55,8 +56,7 @@ export async function fmLogin(
 ): Promise<string> {
   const baseUrl = buildDataApiBaseUrl(config);
   const fetchFn = getFetch(config);
-  const controller = new AbortController();
-  const timerId = setTimeout(() => controller.abort(), config.timeout);
+  const timeout = withTimeout(config);
 
   try {
     const response = await fetchFn(`${baseUrl}/sessions`, {
@@ -66,7 +66,7 @@ export async function fmLogin(
         Authorization: `Basic ${encodeBasicAuth(username, password)}`,
       },
       body: JSON.stringify({}),
-      signal: controller.signal,
+      signal: timeout.signal,
     });
 
     if (response.status === 401) {
@@ -96,7 +96,7 @@ export async function fmLogin(
     const message = err instanceof Error ? err.message : String(err);
     throw new FileMakerIdPError(`FileMaker login network error: ${message}`);
   } finally {
-    clearTimeout(timerId);
+    timeout.clear();
   }
 }
 
@@ -114,8 +114,7 @@ export async function fmFindUserWithPrivileges(
   const baseUrl = buildDataApiBaseUrl(config);
   const fetchFn = getFetch(config);
   const { fields } = config;
-  const controller = new AbortController();
-  const timerId = setTimeout(() => controller.abort(), config.timeout);
+  const timeout = withTimeout(config);
 
   try {
     const response = await fetchFn(
@@ -130,7 +129,7 @@ export async function fmFindUserWithPrivileges(
           query: [{ [fields.usernameField]: `=${username}` }],
           portal: [fields.portalName],
         }),
-        signal: controller.signal,
+        signal: timeout.signal,
       }
     );
 
@@ -206,7 +205,7 @@ export async function fmFindUserWithPrivileges(
       `FileMaker find user network error: ${message}`
     );
   } finally {
-    clearTimeout(timerId);
+    timeout.clear();
   }
 }
 
@@ -220,8 +219,7 @@ export async function fmLogout(
 ): Promise<void> {
   const baseUrl = buildDataApiBaseUrl(config);
   const fetchFn = getFetch(config);
-  const controller = new AbortController();
-  const timerId = setTimeout(() => controller.abort(), config.timeout);
+  const timeout = withTimeout(config);
 
   try {
     const response = await fetchFn(`${baseUrl}/sessions/${token}`, {
@@ -229,7 +227,7 @@ export async function fmLogout(
       headers: {
         "Content-Type": "application/json",
       },
-      signal: controller.signal,
+      signal: timeout.signal,
     });
 
     if (!response.ok) {
@@ -243,6 +241,6 @@ export async function fmLogout(
       `[next-auth-filemaker-idp] fmLogout: failed to close session — ${message}`
     );
   } finally {
-    clearTimeout(timerId);
+    timeout.clear();
   }
 }

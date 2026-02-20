@@ -1,9 +1,9 @@
-"use client";
-
 import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 
 export interface FileMakerLoginFormProps {
+  /** Provider ID to sign in with. Defaults to `"filemaker"`. Must match the `id` passed to `createFileMakerProvider`. */
+  providerId?: string;
   /** Where to redirect after successful login. Defaults to the originating page or `/`. */
   callbackUrl?: string;
   /** CSS class applied to the outer `<form>` element for custom styling. */
@@ -27,6 +27,7 @@ export interface FileMakerLoginFormProps {
  * ```
  */
 export function FileMakerLoginForm({
+  providerId = "filemaker",
   callbackUrl = "/",
   className,
   onError,
@@ -42,7 +43,7 @@ export function FileMakerLoginForm({
     setPending(true);
 
     try {
-      const result = await signIn("filemaker", {
+      const result = await signIn(providerId, {
         username,
         password,
         callbackUrl,
