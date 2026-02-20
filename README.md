@@ -247,16 +247,17 @@ If your dev FileMaker server uses a self-signed cert, pass a custom `fetch` to s
 
 ```typescript
 // auth.ts
-import https from "node:https";
+import { Agent } from "undici";
 
-const agent = new https.Agent({ rejectUnauthorized: false });
+const dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
 
 const fmConfig = loadConfigFromEnv({
-  fetch: (url, init) => fetch(url, { ...init, agent } as RequestInit),
+  fetch: (url, init) =>
+    fetch(url, { ...init, dispatcher } as RequestInit),
 });
 ```
 
-> Do not use self-signed certificates in production.
+> `undici` ships with Node.js 18+ (no extra install needed). Do not use self-signed certificates in production.
 
 ---
 

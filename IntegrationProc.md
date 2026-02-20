@@ -291,14 +291,16 @@ If your development FileMaker server uses a self-signed certificate, Data API re
 
 ```typescript
 // auth.ts
-import https from "node:https";
+import { Agent } from "undici";
 
-const agent = new https.Agent({ rejectUnauthorized: false });
+const dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
 
 const fmConfig = loadConfigFromEnv({
   fetch: (url, init) =>
-    fetch(url, { ...init, agent } as RequestInit),
+    fetch(url, { ...init, dispatcher } as RequestInit),
 });
 ```
+
+> `undici` ships with Node.js 18+ (no extra install needed).
 
 Alternatively, set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local` (applies globally — use with caution).
