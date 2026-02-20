@@ -237,16 +237,16 @@ Create the single file that defines what consumers get when they `import` from t
 
 Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `fmLogin`, `fmLogout`, `fmFindUserWithPrivileges`, `FileMakerLoginForm`, all types, all error classes.
 
-### Step 11: Event logging to FileMaker
+### Step 10: Event logging to FileMaker
 
 Write Auth.js sign-in, sign-out, and failed sign-in events to the `DAPI_EVENTLOG` layout in FileMaker, giving administrators a server-side audit trail of authentication activity.
 
 **Key decisions:**
 - Fire-and-forget — event writes never block or throw; failures are logged as warnings only
 - Successful sign-in and sign-out are handled via Auth.js `events` hooks
-- **Failed sign-in is handled inside the provider's `authorize` callback** (Auth.js fires no event for failures) — `createFileMakerProvider` must accept the config for logging
+- **Failed sign-in is handled inside the provider's `authorize` callback** (Auth.js fires no event for failures) — `createFileMakerProvider` already receives `config` so no signature change is needed
 - Each event opens its own service session (login → create record → logout), since provider sessions are already closed by the time Auth.js events fire
-- Opt-in via `FM_IdP_EVENT_LOG_LAYOUT` env var (default `"DAPI_EVENTLOG"`). If omitted or empty, event logging is disabled
+- Opt-in — set `FM_IdP_EVENT_LOG_LAYOUT` to enable; if omitted or empty, event logging is disabled
 
 **New env var (add to `.env.example`):**
 ```
@@ -286,19 +286,22 @@ fmWriteEventLog(config, entry: EventLogEntry): Promise<void>
 
 **New factory: `createEventHandlers`** (`src/callbacks.ts`):
 ```typescript
-createEventHandlers(config): { signIn, signOut }
+createEventHandlers(config: FileMakerIdPConfig): { signIn, signOut }
 ```
 - Returns Auth.js event handlers for use in the NextAuth `events` config
-- `signIn({ user })` — writes `{ scriptName: "signIn", foreignKeyId: user.id, detail: user.email }`
-- `signOut({ token })` — writes `{ scriptName: "signOut", foreignKeyId: token?.id }`
+- Uses the same `any`-cast pattern as `createJwtCallback` and `createSessionCallback`:
+  - `signIn({ user }: { user: any })` — cast `user as FileMakerUser` to access `user.id` and `user.email`; writes `{ scriptName: "signIn", foreignKeyId: fmUser.id, detail: fmUser.email }`
+  - `signOut({ token }: { token: FileMakerJWT })` — `token.id` is our custom field populated at sign-in by the JWT callback; writes `{ scriptName: "signOut", foreignKeyId: token?.id }`
+  > **Implementation note:** Auth.js v5 types `events.signOut` as `{ token?: JWT }`, so cast `token as FileMakerJWT | undefined` using the same `any`-cast pattern as the JWT/session callbacks; do not rely on the destructure type annotation alone.
+- Imports `FileMakerIdPConfig` and `FileMakerUser` from `./types.js`, `FileMakerJWT` from `./callbacks.js`, and `fmWriteEventLog` from `./filemaker-client.js`
 
 **Provider changes** (`src/provider.ts`):
-- `authorize` already returns `null` on failure; add fire-and-forget `fmWriteEventLog` calls before each `return null`:
+- `authorize` already returns `null` on failure; add `void fmWriteEventLog(config, { ... })` (matching the existing `void fmLogout(...)` pattern) before each `return null`:
   - User credential failure → `{ scriptName: "signInFailed", detail: username, error: "Invalid credentials" }`
   - Service account failure → `{ scriptName: "signInFailed", detail: username, error: "Service account error" }`
   - Profile lookup failure → `{ scriptName: "signInFailed", detail: username, error: "Profile lookup failed" }`
 
-**`src/index.ts`:** Export `createEventHandlers` and `EventLogEntry` type
+**`src/index.ts`:** Export `createEventHandlers`, `fmWriteEventLog`, and `EventLogEntry` type
 
 **Integration example** (update `IntegrationProc.md` Step 5):
 ```typescript
@@ -314,15 +317,16 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 });
 ```
 
-**Tests:** `__tests__/filemaker-client.test.ts` — `fmWriteEventLog` no-op when layout undefined, record creation success, warning on failure; `__tests__/callbacks.test.ts` — `createEventHandlers` returns correct payload shapes; `__tests__/provider.test.ts` — verify `fmWriteEventLog` is called on each failure path
+**Tests:** `__tests__/filemaker-client.test.ts` — `fmWriteEventLog` no-op when layout undefined, record creation success, warning on failure; `__tests__/callbacks.test.ts` — `createEventHandlers` returns correct payload shapes for signIn and signOut; `__tests__/provider.test.ts` — verify `fmWriteEventLog` is called on each failure path
 
-### Step 10: CI/CD and documentation
+### Step 11: CI/CD and documentation
 Set up automated publishing so that creating a GitHub release automatically builds, tests, and publishes a new version of the package to GitHub Packages. Update the README with installation and usage instructions.
 
 **Files:** `.github/workflows/publish.yml`, `README.md`
 
 - GitHub Actions workflow: on release → checkout → install → typecheck → test → build → `npm publish` to GitHub Packages
-- README: Installation, configuration, consuming app integration example, module augmentation snippet, environment variables
+- README: Installation, configuration, consuming app integration example, module augmentation snippet, environment variables (including `FM_IdP_EVENT_LOG_LAYOUT` — opt-in, omit or leave blank to disable event logging)
+- README integration example must include `createEventHandlers` in the import list and `events: createEventHandlers(fmConfig)` in the NextAuth config
 
 ---
 
@@ -336,17 +340,25 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-} from "@your-org/next-auth-filemaker-idp";
+  createEventHandlers,
+} from "@research-allies/next-auth-filemaker-idp";
+import { authConfig } from "@/auth.config";
 
 const fmConfig = loadConfigFromEnv();
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
+  events: createEventHandlers(fmConfig),
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 60,   // session expires 30 minutes after last activity
+    updateAge: 5 * 60, // re-sign the JWT at most once every 5 minutes
+  },
 });
 ```
 

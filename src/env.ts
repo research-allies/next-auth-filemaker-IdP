@@ -9,7 +9,7 @@
  */
 
 import type { FileMakerIdPConfig, FieldMapping } from "./types.js";
-import { ConfigurationError } from "./errors.js";
+import { ConfigurationError, FileMakerIdPError } from "./errors.js";
 
 const REQUIRED_VARS = [
   "FM_IdP_HOST",
@@ -35,6 +35,19 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     throw new ConfigurationError(missing);
   }
 
+  // Validate host is a bare hostname (optionally with port), not a URL or path
+  const rawHost = process.env.FM_IdP_HOST!;
+  try {
+    const parsed = new URL(`https://${rawHost}`);
+    if (parsed.host !== rawHost) {
+      throw new Error();
+    }
+  } catch {
+    throw new FileMakerIdPError(
+      `FM_IdP_HOST must be a hostname (e.g. "fm.example.com"), got: "${rawHost}"`
+    );
+  }
+
   const fields: FieldMapping = {
     idUserField: process.env.FM_IdP_FIELD_ID_USER ?? "id_user",
     usernameField: process.env.FM_IdP_FIELD_USERNAME ?? "userName",
@@ -49,10 +62,19 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
   };
 
   const useHttps = process.env.FM_IdP_USE_HTTPS !== "false";
+  if (!useHttps && process.env.NODE_ENV === "production") {
+    throw new FileMakerIdPError(
+      "FM_IdP_USE_HTTPS=false is not allowed in production. " +
+      "Data API credentials would be sent over plain HTTP."
+    );
+  }
+
   const envTimeout = process.env.FM_IdP_TIMEOUT
     ? parseInt(process.env.FM_IdP_TIMEOUT, 10)
     : 10000;
   const timeout = Number.isNaN(envTimeout) ? 10000 : envTimeout;
+
+  const eventLogLayout = process.env.FM_IdP_EVENT_LOG_LAYOUT || undefined;
 
   return {
     host: process.env.FM_IdP_HOST!,
@@ -63,6 +85,7 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     userLayout: process.env.FM_IdP_USER_LAYOUT ?? "DAPI_USER",
     fields,
     timeout,
+    eventLogLayout,
     ...overrides,
   };
 }

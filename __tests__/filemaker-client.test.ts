@@ -3,6 +3,7 @@ import {
   fmLogin,
   fmFindUserWithPrivileges,
   fmLogout,
+  fmWriteEventLog,
 } from "../src/filemaker-client.js";
 import {
   FileMakerAuthError,
@@ -289,5 +290,90 @@ describe("fmLogout", () => {
       "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/sessions/mySession123",
       expect.objectContaining({ method: "DELETE" })
     );
+  });
+});
+
+// ─── fmWriteEventLog ──────────────────────────────────────────────────────────
+
+describe("fmWriteEventLog", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  it("is a no-op when eventLogLayout is undefined", async () => {
+    const mockFetch = vi.fn() as unknown as typeof globalThis.fetch;
+    const config = { ...baseConfig, fetch: mockFetch };
+    // eventLogLayout is not set on baseConfig
+    await expect(
+      fmWriteEventLog(config, { scriptName: "signIn" })
+    ).resolves.toBeUndefined();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("creates a record with correct field mapping", async () => {
+    // First call: service login; second call: POST record; third call: logout DELETE
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ response: { token: "svc_tok" }, messages: [] }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
+
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    await fmWriteEventLog(config, {
+      scriptName: "signIn",
+      detail: "jdoe@example.com",
+      foreignKeyId: "u001",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/layouts/DAPI_EVENTLOG/records",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer svc_tok" }),
+        body: JSON.stringify({
+          fieldData: {
+            Script_Name: "signIn",
+            Detail: "jdoe@example.com",
+            fk_ForeignKeyID: "u001",
+          },
+        }),
+      })
+    );
+  });
+
+  it("warns but does not throw on HTTP error from record creation", async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ response: { token: "svc_tok" }, messages: [] }) })
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
+
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    await expect(
+      fmWriteEventLog(config, { scriptName: "signInFailed", error: "Invalid credentials" })
+    ).resolves.toBeUndefined();
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("warns but does not throw when service login fails", async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ messages: [{ code: "212", message: "Invalid" }] }) }) as unknown as typeof globalThis.fetch;
+
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    await expect(
+      fmWriteEventLog(config, { scriptName: "signIn" })
+    ).resolves.toBeUndefined();
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("warns but does not throw on network error during record creation", async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ response: { token: "svc_tok" }, messages: [] }) })
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
+
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    await expect(
+      fmWriteEventLog(config, { scriptName: "signOut" })
+    ).resolves.toBeUndefined();
+    expect(console.warn).toHaveBeenCalled();
   });
 });

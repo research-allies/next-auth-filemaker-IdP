@@ -54,6 +54,23 @@ export interface FieldMapping {
 }
 
 /**
+ * Payload written to the FileMaker event log layout on auth events.
+ * Fields map to FM field names via `fmWriteEventLog`.
+ */
+export interface EventLogEntry {
+  /** Event type written to `Script_Name`. One of `"signIn"`, `"signOut"`, `"signInFailed"`. */
+  scriptName: string;
+  /** Human-readable description written to `Detail` (e.g. username or email). */
+  detail?: string;
+  /** Error message written to `Error` (failure events only). */
+  error?: string;
+  /** User PK written to `fk_ForeignKeyID`. */
+  foreignKeyId?: string;
+  /** Additional context written to `Notes`. */
+  notes?: string;
+}
+
+/**
  * Full runtime configuration for the FileMaker IdP package.
  * Built from environment variables via `loadConfigFromEnv()`.
  */
@@ -79,4 +96,9 @@ export interface FileMakerIdPConfig {
    * Defaults to `globalThis.fetch`.
    */
   fetch?: typeof globalThis.fetch;
+  /**
+   * Data API layout name for event log record creation.
+   * If `undefined` (or `FM_IdP_EVENT_LOG_LAYOUT` is unset), event logging is disabled.
+   */
+  eventLogLayout?: string;
 }

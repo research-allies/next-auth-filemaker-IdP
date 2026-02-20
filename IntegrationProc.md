@@ -94,6 +94,7 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
+  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 import { authConfig } from "@/auth.config";
 
@@ -106,6 +107,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
+  events: createEventHandlers(fmConfig),
   session: {
     strategy: "jwt",
     maxAge: 30 * 60,   // session expires 30 minutes after last activity
@@ -311,13 +313,23 @@ export async function signOutAction() {
 
 ## 11. Rate limiting
 
-Each login attempt makes multiple calls to the FileMaker Data API. Without rate limiting, brute-force attacks could overwhelm your FM server. Implement rate limiting on the login route at the application level — for example:
+> **⚠️ Important:** Each login attempt opens **up to 3 Data API sessions** (user validation, service profile lookup, event logging). FileMaker Server has a finite session pool (default: 500 for FM Cloud). Without rate limiting, a brute-force attack can exhaust the session pool within minutes, locking out all Data API consumers — not just this app.
+
+Implement rate limiting on the login route at the application level — for example:
 
 - **Middleware/proxy** — track login attempts by IP and block after a threshold
 - **Reverse proxy / WAF** — configure rate limits on `/api/auth/callback/filemaker` at the infrastructure level (e.g., Cloudflare, nginx, AWS WAF)
 - **Third-party packages** — libraries like `rate-limiter-flexible` or `upstash/ratelimit` can be added to your API route
 
-## 12. Self-signed certificates (development only)
+## 12. Client IP logging
+
+Failed sign-in events are logged with the client IP extracted from the `x-forwarded-for` or `x-real-ip` request headers. These headers are **trivially spoofable** unless your reverse proxy overwrites them from the actual TCP connection. To ensure accurate IP data in your event logs:
+
+- **Cloudflare / Vercel / AWS ALB** — these platforms set trusted `x-forwarded-for` automatically; no action needed.
+- **nginx** — ensure your config includes `proxy_set_header X-Forwarded-For $remote_addr;` (not `$proxy_add_x_forwarded_for`, which preserves client-supplied values).
+- **No reverse proxy** — the logged IP will be whatever the client sends and should not be trusted for security decisions.
+
+## 13. Self-signed certificates (development only)
 
 > **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
 

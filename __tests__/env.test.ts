@@ -33,6 +33,7 @@ function clearEnv() {
     "FM_IdP_FIELD_PROJECT_ID",
     "FM_IdP_FIELD_PROJECT_NAME",
     "FM_IdP_FIELD_ROLE_NAME",
+    "FM_IdP_EVENT_LOG_LAYOUT",
   ];
   for (const k of ALL_VARS) {
     delete process.env[k];
@@ -69,6 +70,7 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.projectIdField).toBe("project::id_project");
     expect(config.fields.projectNameField).toBe("project::projectName");
     expect(config.fields.roleNameField).toBe("role::roleName");
+    expect(config.eventLogLayout).toBeUndefined();
   });
 
   it("respects FM_IdP_USE_HTTPS=false", () => {
@@ -126,6 +128,18 @@ describe("loadConfigFromEnv", () => {
       expect(configErr.missingVars).toContain("FM_IdP_SERVICE_USERNAME");
       expect(configErr.missingVars).toContain("FM_IdP_SERVICE_PASSWORD");
     }
+  });
+
+  it("sets eventLogLayout when FM_IdP_EVENT_LOG_LAYOUT is provided", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_EVENT_LOG_LAYOUT: "DAPI_EVENTLOG" });
+    const config = loadConfigFromEnv();
+    expect(config.eventLogLayout).toBe("DAPI_EVENTLOG");
+  });
+
+  it("leaves eventLogLayout undefined when FM_IdP_EVENT_LOG_LAYOUT is empty string", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_EVENT_LOG_LAYOUT: "" });
+    const config = loadConfigFromEnv();
+    expect(config.eventLogLayout).toBeUndefined();
   });
 
   it("merges programmatic overrides (fetch)", () => {

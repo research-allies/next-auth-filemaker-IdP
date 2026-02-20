@@ -1,6 +1,7 @@
 import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
-import type { FileMakerUser, ProjectAssignment } from "./types.js";
+import type { FileMakerIdPConfig, FileMakerUser, ProjectAssignment } from "./types.js";
+import { fmWriteEventLog } from "./filemaker-client.js";
 
 /**
  * Augmented JWT shape used internally by this package.
@@ -73,5 +74,33 @@ export function createSessionCallback() {
         projects: token.projects ?? [],
       },
     };
+  };
+}
+
+/**
+ * Creates Auth.js event handlers that write sign-in and sign-out events to
+ * the FileMaker event log layout. No-op if `config.eventLogLayout` is unset.
+ */
+export function createEventHandlers(config: FileMakerIdPConfig) {
+  return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    signIn({ user }: { user: any }) {
+      const fmUser = user as FileMakerUser;
+      void fmWriteEventLog(config, {
+        scriptName: "signIn",
+        foreignKeyId: fmUser?.id,
+        detail: JSON.stringify(fmUser),
+        notes: fmUser?.userName ? `User ${fmUser.userName} signed in.` : undefined,
+      });
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    signOut({ token }: { token?: any }) {
+      const fmToken = token as FileMakerJWT | undefined;
+      void fmWriteEventLog(config, {
+        scriptName: "signOut",
+        foreignKeyId: fmToken?.id,
+        notes: fmToken?.userName ? `User ${fmToken.userName} signed out.` : undefined,
+      });
+    },
   };
 }

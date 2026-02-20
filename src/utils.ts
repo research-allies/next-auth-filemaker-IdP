@@ -24,3 +24,13 @@ export function buildDataApiBaseUrl(config: FileMakerIdPConfig): string {
 export function getFetch(config: FileMakerIdPConfig): typeof globalThis.fetch {
   return config.fetch ?? globalThis.fetch;
 }
+
+/**
+ * Strips FileMaker Find operator characters from a string to prevent
+ * query injection when used in `_find` requests.
+ *
+ * FM Find operators: `=`, `==`, `!`, `<`, `>`, `≤`, `≥`, `...`, `//`, `~`, `*`, `@`, `#`
+ */
+export function sanitizeFmFindValue(value: string): string {
+  return value.replace(/[=!<>≤≥~*@#/\\]/g, "");
+}
