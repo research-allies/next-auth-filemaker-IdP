@@ -50,8 +50,5 @@
     "type": "git",
     "url": "https://github.com/research-allies/next-auth-filemaker-IdP.git"
   },
-  "license": "MIT",
-  "dependencies": {
-    "@research-allies/next-auth-filemaker-idp": "file:research-allies-next-auth-filemaker-idp-0.1.0.tgz"
-  }
+  "license": "GPL-3.0-only"
 }
