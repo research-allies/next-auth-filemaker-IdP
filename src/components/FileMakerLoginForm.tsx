@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 
 export interface FileMakerLoginFormProps {
@@ -19,7 +19,7 @@ export interface FileMakerLoginFormProps {
  * @example
  * ```tsx
  * // app/login/page.tsx
- * import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp";
+ * import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp/client";
  *
  * export default function LoginPage() {
  *   return <FileMakerLoginForm callbackUrl="/dashboard" />;
@@ -37,7 +37,7 @@ export function FileMakerLoginForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
     setError(null);
     setPending(true);

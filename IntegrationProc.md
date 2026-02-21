@@ -8,7 +8,7 @@ Outline of steps needed to deploy the package in a Next.js app.
 
 The package is published to GitHub Packages. Add an `.npmrc` in the consuming app root (or your global `~/.npmrc`) with a GitHub Personal Access Token:
 
-```
+```ini
 @research-allies:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT
 ```
@@ -33,7 +33,7 @@ npm install @research-allies/next-auth-filemaker-idp
 
 Copy `.env.example` from the package and add to `.env.local`:
 
-```
+```shell
 # ── Required ────────────────────────────────────────────────
 FM_IdP_HOST=your-filemaker-server.com
 FM_IdP_DATABASE=YourDatabase.fmp12
@@ -96,7 +96,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),
+  events: createEventHandlers(fmConfig),  // no-op if FM_IdP_EVENT_LOG_LAYOUT is unset
   session: {
     strategy: "jwt",
     maxAge: 60 * 60,   // session expires 60 minutes after last activity
@@ -190,7 +190,7 @@ declare module "next-auth" {
       userName: string;
       nameFirst: string;
       nameLast: string;
-      // email is already provided by DefaultSession["user"]
+      email: string;  // narrows DefaultSession["user"].email from string | null | undefined
       projects: ProjectAssignment[];
     } & DefaultSession["user"];
   }
@@ -221,8 +221,7 @@ export default auth;
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
-    // Add other protected paths
+    // Protect all paths except auth endpoints, login, and static assets
     "/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)",
   ],
 };
@@ -314,11 +313,10 @@ The package includes a ready-to-use login form component. You can either use it 
 
 ### Option A: Use the included `FileMakerLoginForm` component
 
-Import from the `/client` subpath. The login page must be a Client Component (`"use client"`):
+Import from the `/client` subpath. The page itself can remain a Server Component — `FileMakerLoginForm` already declares its own `"use client"` boundary:
 
 ```typescript
 // app/login/page.tsx
-"use client";
 import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp/client";
 
 export default function LoginPage() {

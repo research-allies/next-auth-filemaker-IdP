@@ -1,4 +1,4 @@
-# Implementation Plan: `@your-org/next-auth-filemaker-idp`
+# Implementation Plan: `@research-allies/next-auth-filemaker-idp`
 
 ## Context
 
@@ -6,7 +6,7 @@ The project needs a reusable Auth.js v5 provider package that authenticates user
 
 **Key architectural decisions:**
 - **Auth.js v5** (latest, ESM-first, `auth.ts` root config pattern)
-- **GitHub Packages** (private, scoped `@org/next-auth-filemaker-idp`)
+- **GitHub Packages** (private, scoped `@research-allies/next-auth-filemaker-idp`)
 - **Environment-driven config** (all settings via env vars; `.env.local` for dev, service env vars for production)
 - **FileMaker Data API only** (credential validation via session endpoint; profile + privileges via Find with portal data)
 - **JWT session strategy** (no FM tokens in JWT; identity + role/project assignments forwarded to client session)
@@ -34,6 +34,8 @@ next-auth-filemaker-IdP/
 │   ├── filemaker-client.test.ts
 │   ├── provider.test.ts
 │   └── callbacks.test.ts
+├── scripts/
+│   └── inspect-eventlog.ts   # Dev utility: probes DAPI_EVENTLOG field names against a live FM server (not published)
 ├── package.json
 ├── tsconfig.json
 ├── tsup.config.ts            # Dual CJS/ESM build
@@ -60,7 +62,7 @@ Set up the foundation of the npm package — the configuration files that define
     - `"./client"` → `{ "import": "./dist/client.js", "require": "./dist/client.cjs", "types": "./dist/client.d.ts" }` — client-only (`FileMakerLoginForm`)
   - `"files": ["dist", ".env.example"]` — only publish build output and env template (excludes `src/`, `__tests__/`, etc.)
 - `tsconfig.json`: `target: ES2020`, `module: ESNext`, `moduleResolution: bundler`, `strict: true`
-- `tsup.config.ts`: Entry `src/index.ts`, formats `["cjs", "esm"]`, `dts: true`, externalize `next-auth`, `@auth/core`, `react`, `react-dom`
+- `tsup.config.ts`: Entry `src/index.ts`, formats `["cjs", "esm"]`, `dts: true`, externalize `next-auth`, `@auth/core`, `react`, `react-dom`, `next`
 - Peer deps: `next-auth@^5`, `react@^18 || ^19`, `react-dom@^18 || ^19`
 - No runtime dependencies beyond Node 18+ built-in `fetch`
 
@@ -75,9 +77,11 @@ Define the data shapes and configuration options that every other module depends
 - `useHttps` ← `FM_IdP_USE_HTTPS` (default `true`)
 - `serviceUsername` ← `FM_IdP_SERVICE_USERNAME` — Backend service account for profile/privilege queries
 - `servicePassword` ← `FM_IdP_SERVICE_PASSWORD` — Backend service account password
-- `fetch?: typeof globalThis.fetch` — Only programmatic override (not from env), for self-signed cert handling
 - `userLayout` ← `FM_IdP_USER_LAYOUT` (default `"DAPI_USER"`) — Data API layout name for user profile + portal
 - `fields` — FieldMapping (see below)
+- `timeout` ← `FM_IdP_TIMEOUT` (default `10000`) — request timeout in milliseconds for all fetch calls
+- `fetch?: typeof globalThis.fetch` — programmatic override only (not from env), for self-signed cert handling
+- `eventLogLayout?: string` ← `FM_IdP_EVENT_LOG_LAYOUT` — event log layout name; `undefined` disables logging
 
 **`FieldMapping`** (from env vars):
 - `idUserField` ← `FM_IdP_FIELD_ID_USER` (default `"id_user"`) — PK on User table
@@ -104,8 +108,11 @@ FM_IdP_SERVICE_PASSWORD=
 # Auth.js secret — standard NextAuth env var (generate with: openssl rand -base64 32)
 AUTH_SECRET=
 
-# Data API layout for user profile lookup (includes UserProjectRole portal)
+# Data API layout for user profile lookup (includes userProjectRole portal)
 FM_IdP_USER_LAYOUT=DAPI_USER
+
+# Request timeout in milliseconds (default: 10000)
+FM_IdP_TIMEOUT=10000
 
 # User table fields (defaults shown — only override if your schema differs)
 FM_IdP_FIELD_ID_USER=id_user
@@ -119,10 +126,16 @@ FM_IdP_PORTAL_NAME=userProjectRole
 FM_IdP_FIELD_PROJECT_ID=project::id_project
 FM_IdP_FIELD_PROJECT_NAME=project::projectName
 FM_IdP_FIELD_ROLE_NAME=role::roleName
+
+# Event logging — set to your event log layout name to enable; omit or leave blank to disable
+# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG
 ```
 
-**`FileMakerUser`** (returned from `authorize`, stored in JWT):
-- `id` (maps to `id_user`), `userName`, `nameFirst`, `nameLast`, `email`, `projects: ProjectAssignment[]`
+**`UserProfile`** (identity-only; returned as the `profile` field from `fmFindUserWithPrivileges`):
+- `id: string` (maps to `id_user`), `userName: string`, `nameFirst: string`, `nameLast: string`, `email: string`
+
+**`FileMakerUser`** (extends `UserProfile`; returned from `authorize`, forwarded into the JWT):
+- All `UserProfile` fields plus `projects: ProjectAssignment[]`
 
 **`ProjectAssignment`** (one entry per project the user is assigned to):
 - `projectId: string` (maps to `id_project`), `projectName: string` (maps to `projectName`), `roles: string[]` (maps to `roleName`)
@@ -136,6 +149,7 @@ FM_IdP_FIELD_ROLE_NAME=role::roleName
 > **Note:** Passwords are not stored in the User table. FileMaker handles credential validation internally via the Data API session endpoint. The `userName` field maps to the FileMaker account name used for authentication.
 
 **Error classes:** `FileMakerIdPError` (base), `FileMakerAuthError`, `FileMakerQueryError`, `ConfigurationError`
+- `FileMakerQueryError` carries a `statusCode?: number` property (the HTTP status from the failed Data API response), for callers that need to distinguish error types by status code.
 
 ### Step 3: Environment config loader
 Provide a function that reads `process.env` and returns a validated `FileMakerIdPConfig`. This is the single place where env vars are mapped to config — all other modules receive the typed config object.
@@ -144,11 +158,14 @@ Provide a function that reads `process.env` and returns a validated `FileMakerId
 
 - **`loadConfigFromEnv(overrides?): FileMakerIdPConfig`**
   - Reads all `FM_IdP_*` env vars from `process.env`
-  - Applies sensible defaults for field names and `useHttps`
+  - Applies sensible defaults for field names, `useHttps`, and `timeout`
   - Throws `ConfigurationError` if required vars (`FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, `FM_IdP_SERVICE_PASSWORD`) are missing
-  - Accepts an optional `overrides` parameter for programmatic settings like `fetch`
+  - **Host validation:** validates `FM_IdP_HOST` is a bare hostname (e.g. `"fm.example.com"`) using `new URL()` — throws `FileMakerIdPError` if it includes a scheme, path, or other URL components
+  - **Production HTTPS enforcement:** throws `FileMakerIdPError` if `FM_IdP_USE_HTTPS=false` when `NODE_ENV=production` — prevents credentials being sent over plain HTTP
+  - **`FM_IdP_TIMEOUT`:** read from env (milliseconds, default `10000`); falls back to default on `NaN`
+  - Accepts an optional `overrides` parameter (`Partial<Pick<FileMakerIdPConfig, "fetch" | "timeout">>`) for programmatic settings — `overrides.timeout` wins over the env var value
   - **⚠️ SECURITY: Server-only function** — This function reads `process.env` (including service account credentials) and **must only be called in server-side code** (e.g. `auth.ts`). Never import or call `loadConfigFromEnv` from client components or any code marked with `"use client"`. Doing so would expose service credentials to the browser.
-**Test:** `__tests__/env.test.ts` — Set/unset env vars, test defaults, test `ConfigurationError` on missing required vars, test overrides merge
+**Test:** `__tests__/env.test.ts` — Set/unset env vars, test defaults, test `ConfigurationError` on missing required vars, test host validation, test production HTTPS enforcement, test `FM_IdP_TIMEOUT` parsing, test overrides merge (programmatic `timeout` wins over env var)
 
 ### Step 4: Utilities
 Create shared helper functions used by the FM Data API client — things like encoding credentials for HTTP Basic Auth and building the correct API URLs from the configuration.
@@ -158,7 +175,7 @@ Create shared helper functions used by the FM Data API client — things like en
 - `encodeBasicAuth(username, password)` — Base64 encode credentials
 - `buildDataApiBaseUrl(config)` — `https://{host}/fmi/data/vLatest/databases/{db}`
 - `getFetch(config)` — Return custom or global fetch
-- `sanitizeFmFindValue(value)` — Strips FM Find operator characters (`=!<>≤≥~*@#`) to prevent query injection in Find requests
+- `sanitizeFmFindValue(value)` — Strips FM Find operator characters (`=!<>≤≥~*@#/\`) to prevent query injection in Find requests
 
 ### Step 5: FileMaker Data API client
 Build the module that talks directly to FileMaker Server. This handles credential validation (session endpoint), user profile + privilege lookup (Find with portal), and session management.
@@ -172,7 +189,7 @@ Build the module that talks directly to FileMaker Server. This handles credentia
 
 - **`fmFindUserWithPrivileges(config, token, username): Promise<{ profile: UserProfile, projects: ProjectAssignment[] }>`**
   - `POST /fmi/data/vLatest/databases/{db}/layouts/{userLayout}/_find` with `Authorization: Bearer {token}`
-  - Request body: `{ "query": [{ "{usernameField}": "={username}" }], "portal": ["{portalName}"] }`
+  - Request body: `{ "query": [{ "{usernameField}": "=={username}" }], "portal": ["{portalName}"] }` — `==` is the FM exact-match operator; `=` ("begins with") is intentionally avoided to prevent false positives on partial username matches
   - Parses `response.data[0].fieldData` for profile fields (`id_user`, `nameFirst`, `nameLast`, `email`)
   - Parses `response.data[0].portalData["{portalName}"]` for project/role assignments — portal row keys are in `TableName::fieldName` format (e.g. `"project::projectName"`, `"role::roleName"`)
   - Groups portal rows by `projectIdField`, collecting all assigned roles per project into `ProjectAssignment[]`
@@ -195,15 +212,19 @@ Wire the FM Data API calls together into an Auth.js provider — the single piec
 - **`createFileMakerProvider(config, options?: { id?: string })`** — Returns a configured `Credentials({...})` provider:
   - `id` defaults to `"filemaker"`; set a custom ID when running multiple FM providers side-by-side
   - Credentials fields: `username` (text), `password` (password)
+  - **`safeLogValue(value, maxLength?)`** — internal helper that truncates and strips control characters (`\x00–\x1f`) from a string before log/event interpolation; prevents log injection and caps length (default 20 chars)
+  - **Client IP extraction** — on each `authorize` call, the `request` object is inspected for `x-forwarded-for` (first IP only) and `x-real-ip` headers to capture the reported client IP for the audit trail; `undefined` if neither header is present
   - `authorize` callback:
-    1. Validate credentials exist
-    2. Call `fmLogin(config, username, password)` — validates the user's identity; if fails, call `fmWriteEventLog` (fire-and-forget) then return `null`; immediately call `fmLogout(config, userToken)` (fire-and-forget, token not retained)
-    3. Call `fmLogin(config, serviceUsername, servicePassword)` — opens a service session for the profile query; if fails, call `fmWriteEventLog` then return `null`
-    4. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, call `fmWriteEventLog` then return `null`
-    5. Call `fmLogout(config, serviceToken)` — close the service session (fire-and-forget)
-    6. Return `FileMakerUser` object (identity + projects/roles only; no FM token stored)
+    1. Validate credentials exist (return `null` immediately if missing)
+    2. Extract reported client IP from request headers (`x-forwarded-for` → first segment, fallback `x-real-ip`)
+    3. Call `fmLogin(config, username, password)` — validates user identity; on `FileMakerAuthError` or any other error, call `fmWriteEventLog` (fire-and-forget) with `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`, then return `null`
+    4. On successful user login, immediately call `fmLogout(config, userToken)` (fire-and-forget) — the token is discarded; the user's FM credentials are validated but their session is never retained
+    5. Call `fmLogin(config, serviceUsername, servicePassword)` — opens a service session for the profile query; if fails, call `fmWriteEventLog` with `{ scriptName: "signInFailed", notes: "...", error: "Service account error" }` then return `null`
+    6. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, call `fmWriteEventLog` with `{ scriptName: "signInFailed", notes: "...", error: "Profile lookup failed" }` then return `null`
+    7. Call `fmLogout(config, serviceToken)` — close the service session in a `finally` block (fire-and-forget, runs on both success and failure of step 6)
+    8. Return `FileMakerUser` object (identity + projects/roles only; no FM token stored)
 
-> **Security note:** The user's credentials are validated first (step 2). The profile/privilege lookup (steps 3–4) uses a separate backend service account that has read access to the User layout and UserProjectRole portal. All steps must succeed for login to proceed. The service credentials never leave the server.
+> **Security note:** The user's credentials are validated first (step 3). The profile/privilege lookup (steps 5–6) uses a separate backend service account that has read access to the User layout and UserProjectRole portal. All steps must succeed for login to proceed. The service credentials never leave the server.
 
 **Test:** `__tests__/provider.test.ts` — Mock `fmLogin` + `fmFindUserWithPrivileges`, test success/user-auth-failure/service-auth-failure/find-failure paths
 
@@ -212,8 +233,10 @@ Control what user data gets stored in the encrypted JWT token and what gets expo
 
 **File:** `src/callbacks.ts`
 
-- **`createJwtCallback()`** — On `signIn` trigger, copies `userName`, `nameFirst`, `nameLast`, `email`, `projects` (array of `ProjectAssignment`) from user to JWT token
+- **`createJwtCallback()`** — On `signIn` trigger, copies `id`, `userName`, `nameFirst`, `nameLast`, `email`, `projects` (array of `ProjectAssignment`) from user to JWT token; returns `FileMakerJWT`. Consuming apps should use optional module augmentation on `next-auth/jwt`'s `JWT` interface (with all FM fields marked `?`) so Auth.js accepts the return type without a cast.
 - **`createSessionCallback()`** — Forwards `id`, `userName`, `nameFirst`, `nameLast`, `email`, `projects` from JWT to session
+- **`FileMakerJWT`** (exported type) — Extends Auth.js `JWT` with optional FM fields: `id?`, `userName?`, `nameFirst?`, `nameLast?`, `projects?`; used internally and re-exported for consuming app type augmentation
+- **`FileMakerSession`** (exported type) — Extends Auth.js `Session` with a fully-typed `user` object (all fields required); used for session type augmentation in consuming apps
 
 **Test:** `__tests__/callbacks.test.ts` — Test JWT population on signIn, session shape matches expected fields
 
@@ -222,7 +245,7 @@ Provide a reusable login UI component for consuming apps.
 
 **Files:** `src/components/FileMakerLoginForm.tsx`, `src/client.ts`
 
-A React component that provides a ready-to-use login form. The `"use client"` directive is **not** written in source — it is injected at build time by tsup. The component is exported via `src/client.ts` under the `./client` subpath export (not from the main index).
+A React component that provides a ready-to-use login form. The `"use client"` directive is **not** written in source — it is prepended to `dist/client.js` and `dist/client.cjs` at build time via a `prependUseClient()` helper called from tsup's `onSuccess` hook. (`tsup`'s `banner` option was not used because it gets stripped by rollup.) The component is exported via `src/client.ts` under the `./client` subpath export (not from the main index).
 
 - **Props:**
   - `providerId?: string` — Provider ID to sign in with (default: `"filemaker"`; must match the `id` passed to `createFileMakerProvider`)
@@ -259,9 +282,9 @@ Write Auth.js sign-in, sign-out, and failed sign-in events to the `DAPI_EVENTLOG
 - Each event opens its own service session (login → create record → logout), since provider sessions are already closed by the time Auth.js events fire
 - Opt-in — set `FM_IdP_EVENT_LOG_LAYOUT` to enable; if omitted or empty, event logging is disabled
 
-**New env var (add to `.env.example`):**
+**New env var (add to `.env.example`, commented out by default):**
 ```
-FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG   # omit or leave blank to disable event logging
+# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG
 ```
 
 **`FileMakerIdPConfig` changes** (`src/types.ts`):
@@ -301,16 +324,16 @@ createEventHandlers(config: FileMakerIdPConfig): { signIn, signOut }
 ```
 - Returns Auth.js event handlers for use in the NextAuth `events` config
 - Uses the same `any`-cast pattern as `createJwtCallback` and `createSessionCallback`:
-  - `signIn({ user }: { user: any })` — cast `user as FileMakerUser` to access `user.id` and `user.email`; writes `{ scriptName: "signIn", foreignKeyId: fmUser.id, detail: fmUser.email }`
-  - `signOut({ token }: { token: FileMakerJWT })` — `token.id` is our custom field populated at sign-in by the JWT callback; writes `{ scriptName: "signOut", foreignKeyId: token?.id }`
-  > **Implementation note:** Auth.js v5 types `events.signOut` as `{ token?: JWT }`, so cast `token as FileMakerJWT | undefined` using the same `any`-cast pattern as the JWT/session callbacks; do not rely on the destructure type annotation alone.
-- Imports `FileMakerIdPConfig` and `FileMakerUser` from `./types.js`, `FileMakerJWT` from `./callbacks.js`, and `fmWriteEventLog` from `./filemaker-client.js`
+  - `signIn({ user }: { user: any })` — cast `user as FileMakerUser` to access `user.id` and `user.userName`; writes `{ scriptName: "signIn", foreignKeyId: fmUser?.id, notes: "User {userName} signed in." }` (no PII in `detail`; username goes in `notes`)
+  - `signOut(message)` — accepts `{ session: any } | { token?: any }` union (Auth.js v5 sends either shape); extracts token via `"token" in message ? message.token : undefined`, casts as `FileMakerJWT | undefined`; writes `{ scriptName: "signOut", foreignKeyId: fmToken?.id, notes: "User {userName} signed out." }` (or `undefined` notes/foreignKeyId if token is absent)
+  > **Implementation note:** Auth.js v5 types `events.signOut` as `{ token?: JWT }`, so the handler must accept the broader `{ session: any } | { token?: any }` union and not rely on the destructure type annotation alone.
+- `FileMakerJWT` is defined in the same `callbacks.ts` module; imports `FileMakerIdPConfig` and `FileMakerUser` from `./types.js` and `fmWriteEventLog` from `./filemaker-client.js`
 
 **Provider changes** (`src/provider.ts`):
-- `authorize` already returns `null` on failure; add `void fmWriteEventLog(config, { ... })` (matching the existing `void fmLogout(...)` pattern) before each `return null`:
-  - User credential failure → `{ scriptName: "signInFailed", detail: username, error: "Invalid credentials" }`
-  - Service account failure → `{ scriptName: "signInFailed", detail: username, error: "Service account error" }`
-  - Profile lookup failure → `{ scriptName: "signInFailed", detail: username, error: "Profile lookup failed" }`
+- `authorize` already returns `null` on failure; add `void fmWriteEventLog(config, { ... })` (matching the existing `void fmLogout(...)` pattern) before each `return null`; username is passed through `safeLogValue()` and clientIp is extracted from request headers:
+  - User credential failure (both `FileMakerAuthError` and generic errors) → `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`
+  - Service account failure → `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Service account error" }`
+  - Profile lookup failure → `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Profile lookup failed" }`
 
 **`src/index.ts`:** Export `createEventHandlers`, `fmWriteEventLog`, and `EventLogEntry` type
 
