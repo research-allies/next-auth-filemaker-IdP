@@ -173,7 +173,7 @@ Create shared helper functions used by the FM Data API client — things like en
 **File:** `src/utils.ts`
 
 - `encodeBasicAuth(username, password)` — Base64 encode credentials
-- `buildDataApiBaseUrl(config)` — `https://{host}/fmi/data/vLatest/databases/{db}`
+- `buildDataApiBaseUrl(config)` — `https://{host}/fmi/data/vLatest/databases/{db}` — database name is wrapped in `encodeURIComponent()` to handle names containing spaces or special characters safely
 - `getFetch(config)` — Return custom or global fetch
 - `sanitizeFmFindValue(value)` — Strips FM Find operator characters (`=!<>≤≥~*@#/\`) to prevent query injection in Find requests
 

@@ -268,9 +268,10 @@ This serves two purposes:
 ```typescript
 import { auth } from "@/auth";
 
-export default async function ProjectAdminPage({ params }: { params: { projectId: string } }) {
+export default async function ProjectAdminPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
   const session = await auth();
-  const project = session?.user.projects.find((p) => p.projectId === params.projectId);
+  const project = session?.user.projects.find((p) => p.projectId === projectId);
   const isAdmin = project?.roles?.includes("admin");
 
   if (!isAdmin) {
@@ -331,7 +332,7 @@ export default function LoginPage() {
 
 The component accepts optional props:
 - `providerId` — Provider ID to sign in with (default: `"filemaker"`). Must match the `id` passed to `createFileMakerProvider`.
-- `callbackUrl` — Where to redirect after successful login (default: the originating page, or `/` if none)
+- `callbackUrl` — Where to redirect after successful login (default: `/`; pass the URL's `callbackUrl` search param to redirect back to the originating page)
 - `className` — CSS class for the outer `<form>` element
 - `onError` — Callback for custom error handling
 
@@ -350,20 +351,29 @@ import { useState } from "react";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault();
-    await signIn("filemaker", {
+    setError(null);
+    const result = await signIn("filemaker", {
       username,
       password,
       callbackUrl: "/dashboard",
+      redirect: false,
     });
+    if (result?.error) {
+      setError("Invalid username or password.");
+    } else if (result?.url) {
+      window.location.href = result.url;
+    }
   }
 
   return (
     <form onSubmit={handleSubmit}>
       <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
       <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+      {error && <p>{error}</p>}
       <button type="submit">Sign In</button>
     </form>
   );
