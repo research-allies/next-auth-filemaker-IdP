@@ -5,8 +5,7 @@
       "Bash(npm run build:*)",
       "Bash(npm pack:*)",
       "Bash(npm install:*)",
-      "Bash(npx tsc:*)",
-      "Bash(node -e:*)"
+      "Bash(npx tsc:*)"
     ]
   }
 }

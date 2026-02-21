@@ -356,7 +356,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   events: createEventHandlers(fmConfig),
   session: {
     strategy: "jwt",
-    maxAge: 30 * 60,   // session expires 30 minutes after last activity
+    maxAge: 60 * 60,   // session expires 60 minutes after last activity
     updateAge: 5 * 60, // re-sign the JWT at most once every 5 minutes
   },
 });
