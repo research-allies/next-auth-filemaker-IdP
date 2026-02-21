@@ -104,6 +104,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [createFileMakerProvider(fmConfig)],  // optionally: createFileMakerProvider(fmConfig, { id: "custom-id" })
   callbacks: {
+    ...authConfig.callbacks,   // preserves the `authorized` callback from auth.config.ts
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
@@ -158,11 +159,13 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    userName: string;
-    nameFirst: string;
-    nameLast: string;
-    // email is already declared by Auth.js as email?: string | null
-    projects: ProjectAssignment[];
+    // Optional: these are populated on signIn; making them optional avoids
+    // a type conflict with FileMakerJWT (which also declares them optional).
+    id?: string;
+    userName?: string;
+    nameFirst?: string;
+    nameLast?: string;
+    projects?: ProjectAssignment[];
   }
 }
 ```

@@ -189,4 +189,15 @@ describe("createEventHandlers", () => {
       notes: undefined,
     });
   });
+
+  it("signOut handles session-based message shape (no token)", () => {
+    const { signOut } = createEventHandlers(eventConfig);
+    signOut({ session: null });
+
+    expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
+      scriptName: "signOut",
+      foreignKeyId: undefined,
+      notes: undefined,
+    });
+  });
 });

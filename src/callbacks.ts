@@ -93,8 +93,8 @@ export function createEventHandlers(config: FileMakerIdPConfig) {
       });
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    signOut({ token }: { token?: any }) {
-      const fmToken = token as FileMakerJWT | undefined;
+    signOut(message: { session: any } | { token?: any }) {
+      const fmToken = ("token" in message ? message.token : undefined) as FileMakerJWT | undefined;
       void fmWriteEventLog(config, {
         scriptName: "signOut",
         foreignKeyId: fmToken?.id,
