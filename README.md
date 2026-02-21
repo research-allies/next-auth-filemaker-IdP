@@ -8,6 +8,7 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `DAPI_USER` layout (with `userProjectRole` portal)
 3. The service session is closed
 4. A JWT is issued containing identity fields and `projects: ProjectAssignment[]` — no FileMaker tokens ever stored in the JWT
+5. Authentication events (sign-in, sign-out, failed sign-in) are written to the `DAPI_EVENTLOG` layout in FileMaker, providing a server-side audit trail — opt-in via `FM_IdP_EVENT_LOG_LAYOUT`
 
 ## FileMaker files
 
@@ -63,6 +64,7 @@ AUTH_SECRET=<random-secret>           # generate: openssl rand -base64 32
 FM_IdP_USE_HTTPS=true
 FM_IdP_USER_LAYOUT=DAPI_USER
 FM_IdP_TIMEOUT=10000
+# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG   # omit or leave blank to disable event logging
 
 # Field names — only set if your schema differs from the defaults
 FM_IdP_FIELD_ID_USER=id_user
@@ -86,21 +88,30 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
+  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
+import { authConfig } from "@/auth.config";
 
 const fmConfig = loadConfigFromEnv();
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
+    ...authConfig.callbacks,   // preserves the `authorized` callback from auth.config.ts
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  session: { strategy: "jwt", maxAge: 8 * 60 * 60 }, // 8 hours
+  events: createEventHandlers(fmConfig),
+  session: { strategy: "jwt", maxAge: 60 * 60, updateAge: 5 * 60 },
 });
 ```
 
 > **Security:** `loadConfigFromEnv()` reads service account credentials from `process.env`. Only call it in server-side code — never in a `"use client"` component.
+
+> **Callback spread:** Always spread `...authConfig.callbacks` before adding `jwt` and `session`. Omitting the spread silently drops the `authorized` callback defined in `auth.config.ts`, which disables route protection.
+
+> **Event logging:** `createEventHandlers` is a no-op when `FM_IdP_EVENT_LOG_LAYOUT` is not set — safe to include in all configurations.
 
 ### 3. API route handler
 
@@ -156,7 +167,8 @@ declare module "next-auth/jwt" {
 
 ```typescript
 // app/login/page.tsx
-import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp";
+"use client";
+import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp/client";
 
 export default function LoginPage() {
   return <FileMakerLoginForm callbackUrl="/dashboard" />;
@@ -164,6 +176,8 @@ export default function LoginPage() {
 ```
 
 Props: `callbackUrl?: string`, `className?: string`, `onError?: (error: string) => void`
+
+> **Why `/client`?** `FileMakerLoginForm` uses React hooks and is published under the `./client` subpath export so bundlers can correctly resolve the `"use client"` boundary. Importing from the main package path will cause a Server Component error.
 
 ### Option B: Custom form
 
@@ -237,6 +251,7 @@ export default async function AdminPage({ params }: { params: { projectId: strin
 | `FM_IdP_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
 | `FM_IdP_USER_LAYOUT` | | `DAPI_USER` | Layout name for user profile + portal |
 | `FM_IdP_TIMEOUT` | | `10000` | Request timeout in ms |
+| `FM_IdP_EVENT_LOG_LAYOUT` | | *(disabled)* | Layout name for auth event log writes; omit or leave blank to disable |
 | `FM_IdP_FIELD_ID_USER` | | `id_user` | User table PK field |
 | `FM_IdP_FIELD_USERNAME` | | `userName` | Username field (used for Find queries) |
 | `FM_IdP_FIELD_NAME_FIRST` | | `nameFirst` | First name field |
