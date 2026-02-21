@@ -313,7 +313,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     session: createSessionCallback(),
   },
   events: createEventHandlers(fmConfig),
-  session: { strategy: "jwt", maxAge: 30 * 60, updateAge: 5 * 60 },
+  session: { strategy: "jwt", maxAge: 60 * 60, updateAge: 5 * 60 },
 });
 ```
 

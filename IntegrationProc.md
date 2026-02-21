@@ -42,6 +42,7 @@ AUTH_SECRET=<random-secret>
 # ── Optional (defaults shown) ────────────────────────────────
 FM_IdP_USE_HTTPS=true
 FM_IdP_USER_LAYOUT=DAPI_USER
+# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG   # omit or leave blank to disable event logging
 
 # Field names — only set if your schema differs from defaults
 FM_IdP_FIELD_ID_USER=id_user
@@ -111,7 +112,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   events: createEventHandlers(fmConfig),
   session: {
     strategy: "jwt",
-    maxAge: 30 * 60,   // session expires 30 minutes after last activity
+    maxAge: 60 * 60,   // session expires 60 minutes after last activity
     updateAge: 5 * 60, // re-sign the JWT at most once every 5 minutes
   },
 });
@@ -205,7 +206,25 @@ export const config = {
 };
 ```
 
-### Checking project-level roles in server components
+### Defense-in-depth and accessing session data in pages
+
+The proxy/middleware is the outer gate — it redirects unauthenticated users before any page renders. However, it does **not** enforce project- or role-level access. For any page that shows role-gated content or needs user identity server-side, call `auth()` directly:
+
+```typescript
+// Any server component or async layout
+import { auth } from "@/auth";
+
+export default async function SomePage() {
+  const session = await auth();
+  // session.user is fully typed: id, userName, nameFirst, nameLast, projects
+}
+```
+
+This serves two purposes:
+1. **Session data** — read the user's identity and project assignments without a round-trip to the client
+2. **Defense-in-depth** — even if the proxy matcher is misconfigured, the page itself enforces access
+
+#### Checking project-level roles in server components
 
 ```typescript
 import { auth } from "@/auth";
@@ -222,6 +241,32 @@ export default async function ProjectAdminPage({ params }: { params: { projectId
   return <div>Project admin content</div>;
 }
 ```
+
+#### Accessing session data in Client Components
+
+Use `useSession()` from `next-auth/react`. Wrap the relevant subtree in `<SessionProvider>` (typically in your root layout):
+
+```typescript
+// app/layout.tsx
+import { SessionProvider } from "next-auth/react";
+
+export default function RootLayout({ children }) {
+  return <SessionProvider>{children}</SessionProvider>;
+}
+```
+
+```typescript
+// Any client component
+"use client";
+import { useSession } from "next-auth/react";
+
+export function UserGreeting() {
+  const { data: session } = useSession();
+  return <span>Hello, {session?.user.nameFirst}</span>;
+}
+```
+
+> **Note:** `useSession()` reads the already-issued JWT from the browser — it does not make a new server call. Role enforcement must still happen server-side; never trust client-readable session data as a security boundary.
 
 ## 9. Add a login page
 
