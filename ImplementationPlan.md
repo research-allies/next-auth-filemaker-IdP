@@ -2,14 +2,14 @@
 
 ## Context
 
-The project needs a reusable Auth.js v5 provider package that authenticates users against an on-premises FileMaker Server via the Data API, then queries the user's profile and role/project privileges via the same Data API. This package will be installed in multiple NextJS apps via GitHub Packages. The repo is new (only LICENSE + README exist).
+The project needs a reusable Auth.js v5 provider package that authenticates users against an on-premises FileMaker Server via the Data API, then queries the user's profile and role/project privileges via the same Data API. This package is installed in consuming NextJS apps via GitHub Packages.
 
 **Key architectural decisions:**
 - **Auth.js v5** (latest, ESM-first, `auth.ts` root config pattern)
 - **GitHub Packages** (private, scoped `@org/next-auth-filemaker-idp`)
 - **Environment-driven config** (all settings via env vars; `.env.local` for dev, service env vars for production)
 - **FileMaker Data API only** (credential validation via session endpoint; profile + privileges via Find with portal data)
-- **JWT session strategy** (FM token in JWT server-side only; role/projects forwarded to client session)
+- **JWT session strategy** (no FM tokens in JWT; identity + role/project assignments forwarded to client session)
 
 ---
 
@@ -26,8 +26,9 @@ next-auth-filemaker-IdP/
 │   ├── filemaker-client.ts   # FM Data API client (login/logout/find user)
 │   ├── provider.ts           # Auth.js CredentialsProvider factory
 │   ├── callbacks.ts          # JWT + Session callback factories, token helpers
+│   ├── client.ts             # "use client" barrel — exports FileMakerLoginForm via ./client subpath
 │   └── components/
-│       └── FileMakerLoginForm.tsx  # "use client" login form component
+│       └── FileMakerLoginForm.tsx  # Login form component ("use client" injected at build time)
 ├── __tests__/
 │   ├── env.test.ts
 │   ├── filemaker-client.test.ts
@@ -54,7 +55,9 @@ Set up the foundation of the npm package — the configuration files that define
 **Files:** `package.json`, `tsconfig.json`, `tsup.config.ts`, `vitest.config.ts`, `.gitignore`
 
 - `package.json`: Scoped name, `"type": "module"`, dual CJS/ESM exports, `next-auth@^5` as peer dep, dev deps: `typescript`, `tsup`, `vitest`, `@types/node`. `publishConfig` pointing to GitHub Packages.
-  - `"exports"`: `{ ".": { "import": "./dist/index.js", "require": "./dist/index.cjs", "types": "./dist/index.d.ts" } }`
+  - `"exports"`: two subpaths:
+    - `"."` → `{ "import": "./dist/index.js", "require": "./dist/index.cjs", "types": "./dist/index.d.ts" }` — server-side API
+    - `"./client"` → `{ "import": "./dist/client.js", "require": "./dist/client.cjs", "types": "./dist/client.d.ts" }` — client-only (`FileMakerLoginForm`)
   - `"files": ["dist", ".env.example"]` — only publish build output and env template (excludes `src/`, `__tests__/`, etc.)
 - `tsconfig.json`: `target: ES2020`, `module: ESNext`, `moduleResolution: bundler`, `strict: true`
 - `tsup.config.ts`: Entry `src/index.ts`, formats `["cjs", "esm"]`, `dts: true`, externalize `next-auth`, `@auth/core`, `react`, `react-dom`
@@ -155,6 +158,7 @@ Create shared helper functions used by the FM Data API client — things like en
 - `encodeBasicAuth(username, password)` — Base64 encode credentials
 - `buildDataApiBaseUrl(config)` — `https://{host}/fmi/data/vLatest/databases/{db}`
 - `getFetch(config)` — Return custom or global fetch
+- `sanitizeFmFindValue(value)` — Strips FM Find operator characters (`=!<>≤≥~*@#`) to prevent query injection in Find requests
 
 ### Step 5: FileMaker Data API client
 Build the module that talks directly to FileMaker Server. This handles credential validation (session endpoint), user profile + privilege lookup (Find with portal), and session management.
@@ -179,6 +183,8 @@ Build the module that talks directly to FileMaker Server. This handles credentia
   - `DELETE /fmi/data/vLatest/databases/{db}/sessions/{token}`
   - Fire-and-forget (logs warnings, never throws)
 
+> All functions wrap fetch calls with an internal `withTimeout(config)` helper that returns an `AbortController` signal honouring `config.timeout` (default 10000ms).
+
 **Test:** `__tests__/filemaker-client.test.ts` — Mock fetch, test login success/failure, find user with portal parsing, portal row grouping into ProjectAssignment[], no-user-found error, empty portal (user with no assignments), logout
 
 ### Step 6: Auth.js provider
@@ -186,13 +192,14 @@ Wire the FM Data API calls together into an Auth.js provider — the single piec
 
 **File:** `src/provider.ts`
 
-- **`createFileMakerProvider(config)`** — Returns a configured `Credentials({...})` provider:
-  - `id: "filemaker"`, credentials fields: `username` (text), `password` (password)
+- **`createFileMakerProvider(config, options?: { id?: string })`** — Returns a configured `Credentials({...})` provider:
+  - `id` defaults to `"filemaker"`; set a custom ID when running multiple FM providers side-by-side
+  - Credentials fields: `username` (text), `password` (password)
   - `authorize` callback:
     1. Validate credentials exist
-    2. Call `fmLogin(config, username, password)` — validates the user's identity; if fails, return `null`; immediately call `fmLogout(config, userToken)` (fire-and-forget, token not retained)
-    3. Call `fmLogin(config, serviceUsername, servicePassword)` — opens a service session for the profile query; if fails, return `null`
-    4. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, return `null`
+    2. Call `fmLogin(config, username, password)` — validates the user's identity; if fails, call `fmWriteEventLog` (fire-and-forget) then return `null`; immediately call `fmLogout(config, userToken)` (fire-and-forget, token not retained)
+    3. Call `fmLogin(config, serviceUsername, servicePassword)` — opens a service session for the profile query; if fails, call `fmWriteEventLog` then return `null`
+    4. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, call `fmWriteEventLog` then return `null`
     5. Call `fmLogout(config, serviceToken)` — close the service session (fire-and-forget)
     6. Return `FileMakerUser` object (identity + projects/roles only; no FM token stored)
 
@@ -211,31 +218,35 @@ Control what user data gets stored in the encrypted JWT token and what gets expo
 **Test:** `__tests__/callbacks.test.ts` — Test JWT population on signIn, session shape matches expected fields
 
 ### Step 8: Login form component
-Provide a reusable login UI component so both Monitor and Design get a consistent sign-in experience out of the box, without each app having to build its own login form.
+Provide a reusable login UI component for consuming apps.
 
-**File:** `src/components/FileMakerLoginForm.tsx`
+**Files:** `src/components/FileMakerLoginForm.tsx`, `src/client.ts`
 
-A `"use client"` React component that provides a ready-to-use login form:
+A React component that provides a ready-to-use login form. The `"use client"` directive is **not** written in source — it is injected at build time by tsup. The component is exported via `src/client.ts` under the `./client` subpath export (not from the main index).
 
 - **Props:**
+  - `providerId?: string` — Provider ID to sign in with (default: `"filemaker"`; must match the `id` passed to `createFileMakerProvider`)
   - `callbackUrl?: string` — Where to redirect after login (default: the page user came from, or `/`)
   - `className?: string` — CSS class for the outer `<form>` element
   - `onError?: (error: string) => void` — Callback when login fails (for custom error display)
 
 - **Behavior:**
   - Renders username + password inputs and a submit button
-  - Calls `signIn("filemaker", { username, password, callbackUrl })` on submit
-  - Displays an error message if authentication fails
-  - Minimal default styling (easy to override via className or wrapping)
+  - Calls `signIn(providerId, { username, password, callbackUrl, redirect: false })` on submit
+  - On success: redirects via `window.location.href`; on error: displays message and calls `onError`
+  - Shows loading state and disables inputs during submission
+  - Minimal default styling (easy to override via `className` or wrapping)
 
-- **Peer deps added:** `react` and `react-dom` (already present in all NextJS apps)
+- **Peer deps:** `react` and `react-dom` (already present in all NextJS apps)
 
-### Step 9: Main entry point
-Create the single file that defines what consumers get when they `import` from this package. Everything the apps need is exported from one place.
+### Step 9: Entry points
+Define what consumers get when they import from the package.
 
-**File:** `src/index.ts`
+**`src/index.ts`** (default entry — server-side API):
+Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `createEventHandlers`, `fmLogin`, `fmLogout`, `fmFindUserWithPrivileges`, `fmWriteEventLog`, all types (including `FileMakerJWT`, `FileMakerSession`, `EventLogEntry`), all error classes. Does **not** export `FileMakerLoginForm`.
 
-Re-exports: `loadConfigFromEnv`, `createFileMakerProvider`, `createJwtCallback`, `createSessionCallback`, `fmLogin`, `fmLogout`, `fmFindUserWithPrivileges`, `FileMakerLoginForm`, all types, all error classes.
+**`src/client.ts`** (`./client` subpath entry — client-only):
+Re-exports `FileMakerLoginForm` and `FileMakerLoginFormProps`. The `"use client"` directive is injected here at build time by tsup so bundlers correctly resolve the client boundary.
 
 ### Step 10: Event logging to FileMaker
 
@@ -303,12 +314,13 @@ createEventHandlers(config: FileMakerIdPConfig): { signIn, signOut }
 
 **`src/index.ts`:** Export `createEventHandlers`, `fmWriteEventLog`, and `EventLogEntry` type
 
-**Integration example** (update `IntegrationProc.md` Step 5):
+**Integration example** (see `IntegrationProc.md` Step 5):
 ```typescript
 export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
+    ...authConfig.callbacks,
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
@@ -319,21 +331,17 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
 **Tests:** `__tests__/filemaker-client.test.ts` — `fmWriteEventLog` no-op when layout undefined, record creation success, warning on failure; `__tests__/callbacks.test.ts` — `createEventHandlers` returns correct payload shapes for signIn and signOut; `__tests__/provider.test.ts` — verify `fmWriteEventLog` is called on each failure path
 
-### Step 11: CI/CD and documentation
-Set up automated publishing so that creating a GitHub release automatically builds, tests, and publishes a new version of the package to GitHub Packages. Update the README with installation and usage instructions.
+### Step 11: CI/CD and documentation ✅
+GitHub Actions workflow publishes to GitHub Packages on release. README covers installation, environment variables, full `auth.ts` integration example, type augmentation snippet, login form usage, and route protection patterns.
 
 **Files:** `.github/workflows/publish.yml`, `README.md`
-
-- GitHub Actions workflow: on release → checkout → install → typecheck → test → build → `npm publish` to GitHub Packages
-- README: Installation, configuration, consuming app integration example, module augmentation snippet, environment variables (including `FM_IdP_EVENT_LOG_LAYOUT` — opt-in, omit or leave blank to disable event logging)
-- README integration example must include `createEventHandlers` in the import list and `events: createEventHandlers(fmConfig)` in the NextAuth config
 
 ---
 
 ## Consuming App Integration Example
 
 ```typescript
-// auth.ts (in Monitor or Design app)
+// auth.ts (in consuming app)
 import NextAuth from "next-auth";
 import {
   loadConfigFromEnv,
@@ -350,6 +358,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [createFileMakerProvider(fmConfig)],
   callbacks: {
+    ...authConfig.callbacks,
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
