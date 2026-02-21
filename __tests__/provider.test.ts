@@ -200,7 +200,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       scriptName: "signInFailed",
-      notes: "User jdoe sign in failed from IP undefined.",
+      notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Invalid credentials",
     });
   });
@@ -212,7 +212,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       scriptName: "signInFailed",
-      notes: "User jdoe sign in failed from IP undefined.",
+      notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Invalid credentials",
     });
   });
@@ -226,7 +226,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       scriptName: "signInFailed",
-      notes: "User jdoe sign in failed from IP undefined.",
+      notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Service account error",
     });
   });
@@ -241,7 +241,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       scriptName: "signInFailed",
-      notes: "User jdoe sign in failed from IP undefined.",
+      notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Profile lookup failed",
     });
   });

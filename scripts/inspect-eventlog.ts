@@ -2,9 +2,17 @@ import { fmLogin, fmLogout } from "../src/filemaker-client.js";
 import { buildDataApiBaseUrl } from "../src/utils.js";
 import type { FileMakerIdPConfig } from "../src/types.js";
 
+const serviceUsername = process.env.FM_IdP_SERVICE_USERNAME;
+const servicePassword = process.env.FM_IdP_SERVICE_PASSWORD;
+if (!serviceUsername || !servicePassword) {
+  throw new Error("FM_IdP_SERVICE_USERNAME and FM_IdP_SERVICE_PASSWORD must be set");
+}
+
 const config: FileMakerIdPConfig = {
-  host: "db.research-allies.cloud", database: "IdP_Accounts.fmp12", useHttps: true,
-  serviceUsername: "acct_dapi", servicePassword: "acct_dapi", userLayout: "DAPI_USER", timeout: 10000,
+  host: process.env.FM_IdP_HOST ?? "db.research-allies.cloud",
+  database: process.env.FM_IdP_DATABASE ?? "IdP_Accounts.fmp12",
+  useHttps: true,
+  serviceUsername, servicePassword, userLayout: "DAPI_USER", timeout: 10000,
   fields: { idUserField:"id_user", usernameField:"userName", nameFirstField:"nameFirst", nameLastField:"nameLast", emailField:"email", portalName:"userProjectRole", projectIdField:"project::id_project", projectNameField:"project::projectName", roleNameField:"role::roleName" },
 };
 

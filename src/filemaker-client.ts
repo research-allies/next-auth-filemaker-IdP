@@ -268,7 +268,9 @@ export async function fmWriteEventLog(
     console.warn(`[next-auth-filemaker-idp] fmWriteEventLog: ${message}`);
   } finally {
     timeout.clear();
-    void fmLogout(config, token);
+    if (token) {
+      void fmLogout(config, token);
+    }
   }
 }
 

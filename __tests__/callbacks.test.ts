@@ -157,14 +157,13 @@ describe("createEventHandlers", () => {
     vi.clearAllMocks();
   });
 
-  it("signIn calls fmWriteEventLog with full user profile JSON in detail", () => {
+  it("signIn calls fmWriteEventLog with user ID and notes (no PII in detail)", () => {
     const { signIn } = createEventHandlers(eventConfig);
     signIn({ user: fmUser });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
       scriptName: "signIn",
       foreignKeyId: "u001",
-      detail: JSON.stringify(fmUser),
       notes: "User jdoe signed in.",
     });
   });

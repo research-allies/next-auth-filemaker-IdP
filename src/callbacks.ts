@@ -89,7 +89,6 @@ export function createEventHandlers(config: FileMakerIdPConfig) {
       void fmWriteEventLog(config, {
         scriptName: "signIn",
         foreignKeyId: fmUser?.id,
-        detail: JSON.stringify(fmUser),
         notes: fmUser?.userName ? `User ${fmUser.userName} signed in.` : undefined,
       });
     },
