@@ -80,8 +80,59 @@ FM_IdP_FIELD_ROLE_NAME=role::roleName
 
 ### 2. `auth.ts`
 
+#### Next.js 16+ (recommended)
+
+Since `proxy.ts` in Next.js 16 runs on the Node.js runtime (not the edge), everything can live in a single file:
+
 ```typescript
-// auth.ts (app root)
+// src/auth.ts
+import NextAuth from "next-auth";
+import {
+  loadConfigFromEnv,
+  createFileMakerProvider,
+  createJwtCallback,
+  createSessionCallback,
+  createEventHandlers,
+} from "@research-allies/next-auth-filemaker-idp";
+
+const fmConfig = loadConfigFromEnv();
+
+export const { auth, handlers, signIn, signOut } = NextAuth({
+  pages: { signIn: "/login" },
+  providers: [createFileMakerProvider(fmConfig)],
+  callbacks: {
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
+    jwt: createJwtCallback(),
+    session: createSessionCallback(),
+  },
+  events: createEventHandlers(fmConfig),
+  session: { strategy: "jwt", maxAge: 60 * 60, updateAge: 5 * 60 },
+});
+```
+
+#### Next.js 15 and earlier
+
+Middleware runs on the edge runtime in Next.js 15, so you need to split the config into two files:
+
+```typescript
+// src/auth.config.ts — edge-safe, no Node.js APIs
+import type { NextAuthConfig } from "next-auth";
+
+export const authConfig = {
+  pages: { signIn: "/login" },
+  callbacks: {
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
+  },
+  providers: [],
+} satisfies NextAuthConfig;
+```
+
+```typescript
+// src/auth.ts
 import NextAuth from "next-auth";
 import {
   loadConfigFromEnv,
@@ -107,9 +158,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 });
 ```
 
-> **Security:** `loadConfigFromEnv()` reads service account credentials from `process.env`. Only call it in server-side code — never in a `"use client"` component.
+> **Warning (Next.js 15):** Always spread `...authConfig.callbacks` before adding `jwt` and `session`. Omitting the spread silently drops the `authorized` callback, causing an infinite redirect loop to `/login`.
 
-> **Callback spread:** Always spread `...authConfig.callbacks` before adding `jwt` and `session`. Omitting the spread silently drops the `authorized` callback defined in `auth.config.ts`, which disables route protection.
+> **Security:** `loadConfigFromEnv()` reads service account credentials from `process.env`. Only call it in server-side code — never in a `"use client"` component.
 
 > **Event logging:** `createEventHandlers` is a no-op when `FM_IdP_EVENT_LOG_LAYOUT` is not set — safe to include in all configurations.
 
@@ -165,9 +216,10 @@ declare module "next-auth/jwt" {
 
 ### Option A: Use the included component
 
+The page itself can remain a Server Component — `FileMakerLoginForm` already declares its own `"use client"` boundary:
+
 ```typescript
 // app/login/page.tsx
-"use client";
 import { FileMakerLoginForm } from "@research-allies/next-auth-filemaker-idp/client";
 
 export default function LoginPage() {
@@ -175,7 +227,7 @@ export default function LoginPage() {
 }
 ```
 
-Props: `callbackUrl?: string`, `className?: string`, `onError?: (error: string) => void`
+Props: `providerId?: string`, `callbackUrl?: string`, `className?: string`, `onError?: (error: string) => void`
 
 > **Why `/client`?** `FileMakerLoginForm` uses React hooks and is published under the `./client` subpath export so bundlers can correctly resolve the `"use client"` boundary. Importing from the main package path will cause a Server Component error.
 
@@ -210,26 +262,47 @@ export default function LoginPage() {
 
 ## Protecting routes
 
+### Next.js 16+: `proxy.ts`
+
 ```typescript
-// middleware.ts
+// src/proxy.ts
 import { auth } from "@/auth";
 
-export default auth((req) => {
-  if (!req.auth) {
-    return Response.redirect(new URL("/login", req.url));
-  }
-});
+export default auth;
 
-export const config = { matcher: ["/dashboard/:path*"] };
+export const config = {
+  matcher: [
+    // Protect all paths except auth endpoints, login, and static assets
+    "/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
 ```
 
+> **Warning:** Always import `auth` from your own `@/auth` module. Never create a separate NextAuth instance in `proxy.ts` (e.g. `export default NextAuth(config).auth`) — this produces a second instance with a different JWT signing context, causing silent signature mismatches and an infinite redirect loop to `/login`.
+
+### Next.js 15 and earlier: `middleware.ts`
+
 ```typescript
-// Checking a project-level role in a server component
+// src/middleware.ts
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
+
+export default NextAuth(authConfig).auth;
+
+export const config = {
+  matcher: ["/dashboard/:path*"],
+};
+```
+
+### Checking project-level roles in server components
+
+```typescript
 import { auth } from "@/auth";
 
-export default async function AdminPage({ params }: { params: { projectId: string } }) {
+export default async function AdminPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
   const session = await auth();
-  const project = session?.user.projects.find((p) => p.projectId === params.projectId);
+  const project = session?.user.projects.find((p) => p.projectId === projectId);
 
   if (!project?.roles.includes("admin")) return <p>Access denied</p>;
 
