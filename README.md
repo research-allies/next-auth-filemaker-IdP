@@ -38,7 +38,13 @@ Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-all
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-Then install:
+This package requires **Auth.js v5** (`next-auth ^5`) along with `react` and `react-dom` as peer dependencies. If your app doesn't have them yet, install everything together:
+
+```bash
+npm install next-auth @research-allies/next-auth-filemaker-idp
+```
+
+If `next-auth` is already installed:
 
 ```bash
 npm install @research-allies/next-auth-filemaker-idp

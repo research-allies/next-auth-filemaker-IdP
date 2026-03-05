@@ -17,21 +17,31 @@ The PAT needs `read:packages` scope.
 
 ## 2. Install the package
 
+Install `next-auth` and the IdP package together. Auth.js v5 is still in beta — there is no stable `5.x` release on npm yet, so you must pin the beta explicitly:
+
 ```bash
-npm install @research-allies/next-auth-filemaker-idp
+npm install "next-auth@5.0.0-beta.30" @research-allies/next-auth-filemaker-idp
 ```
+
+> **Why pin the beta?** `npm install next-auth` resolves to the latest stable release (v4), which uses a different API and is incompatible with this package. `next-auth@^5` produces an `ETARGET` error because no stable 5.x exists. Pin to the latest beta listed at [npmjs.com/package/next-auth](https://www.npmjs.com/package/next-auth?activeTab=versions).
 
 > **Local development tip:** When testing against a local build of the package, use `npm pack` to create a tarball and install from that rather than a `file:` or symlink install — Turbopack cannot resolve symlinks:
 > ```bash
 > # In the IdP package directory
 > npm run build && npm pack
 > # In the consuming app (use --legacy-peer-deps to avoid peer resolution issues)
-> npm install ../next-auth-filemaker-IdP/*.tgz --legacy-peer-deps
+> npm install "next-auth@5.0.0-beta.30" ../next-auth-filemaker-IdP/*.tgz --legacy-peer-deps
 > ```
 
 ## 3. Set environment variables
 
-Copy `.env.example` from the package and add to `.env.local`:
+First, generate `AUTH_SECRET` — the app will not start without it:
+
+```bash
+openssl rand -base64 32
+```
+
+Then create `.env.local` in the app root with the generated value and your FileMaker credentials:
 
 ```shell
 # ── Required ────────────────────────────────────────────────
@@ -39,7 +49,7 @@ FM_IdP_HOST=your-filemaker-server.com
 FM_IdP_DATABASE=YourDatabase.fmp12
 FM_IdP_SERVICE_USERNAME=
 FM_IdP_SERVICE_PASSWORD=
-AUTH_SECRET=<random-secret>
+AUTH_SECRET=<paste generated secret here>
 
 # ── Optional (defaults shown) ────────────────────────────────
 FM_IdP_USE_HTTPS=true
@@ -59,14 +69,6 @@ FM_IdP_FIELD_PROJECT_NAME=project::projectName
 FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
-Generate `AUTH_SECRET` with:
-
-```bash
-npx auth secret
-# or
-openssl rand -base64 32
-```
-
 ## 4. Create `auth.ts`
 
 ### Next.js 16+ (recommended)
@@ -74,7 +76,7 @@ openssl rand -base64 32
 Since `proxy.ts` in Next.js 16 runs on the Node.js runtime (not edge), there is no need for a separate edge-safe `auth.config.ts`. Put everything in a single `auth.ts`:
 
 ```typescript
-// src/auth.ts
+// auth.ts  (root of project; use src/auth.ts if your project has a src/ layout)
 import NextAuth from "next-auth";
 import {
   loadConfigFromEnv,
@@ -114,7 +116,7 @@ Next.js 15 middleware runs on the edge runtime, which cannot import Node.js APIs
 **`auth.config.ts`** — edge-safe, no Node.js APIs:
 
 ```typescript
-// src/auth.config.ts
+// auth.config.ts
 import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
@@ -131,7 +133,7 @@ export const authConfig = {
 **`auth.ts`** — server-only, full config:
 
 ```typescript
-// src/auth.ts
+// auth.ts
 import NextAuth from "next-auth";
 import {
   loadConfigFromEnv,
@@ -168,13 +170,16 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 Create `app/api/auth/[...nextauth]/route.ts` that re-exports the handlers:
 
 ```typescript
+// app/api/auth/[...nextauth]/route.ts
 import { handlers } from "@/auth";
 export const { GET, POST } = handlers;
 ```
 
 ## 6. Add type augmentation
 
-Create `types/next-auth.d.ts` to extend the Session and JWT types with the FileMaker user fields:
+Create `types/next-auth.d.ts` to extend the Session and JWT types with the FileMaker user fields.
+
+> **`tsconfig.json` prerequisite:** The default Next.js `tsconfig.json` includes `"**/*.ts"`, which picks up `types/next-auth.d.ts` automatically. If your project scopes includes to a subdirectory (e.g., `"src/**/*.ts"`), add `"types/**/*.ts"` to the `include` array, or TypeScript will silently ignore the augmentation.
 
 ```typescript
 import { DefaultSession } from "next-auth";
@@ -214,10 +219,10 @@ declare module "next-auth/jwt" {
 ### Next.js 16+: use `proxy.ts`
 
 ```typescript
-// src/proxy.ts
+// proxy.ts  (root of project; use src/proxy.ts if your project has a src/ layout)
 import { auth } from "@/auth";
 
-export default auth;
+export { auth as proxy };
 
 export const config = {
   matcher: [
@@ -229,10 +234,12 @@ export const config = {
 
 > **Warning:** Always import `auth` from your own `@/auth` module. **Never** create a separate NextAuth instance in `proxy.ts` (e.g., `export default NextAuth(config).auth`) — this produces a second instance with a different JWT signing context, causing silent JWT signature mismatches and an infinite redirect loop to `/login`.
 
+> **Note:** Use `export { auth as proxy }` rather than `export default auth`. Next.js 16 requires the proxy handler to be a named export called `proxy` — exporting `auth` as the default does not satisfy this requirement.
+
 ### Next.js 15 and earlier: use `middleware.ts`
 
 ```typescript
-// src/middleware.ts
+// middleware.ts
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 
@@ -284,19 +291,9 @@ export default async function ProjectAdminPage({ params }: { params: Promise<{ p
 
 #### Accessing session data in Client Components
 
-Use `useSession()` from `next-auth/react`. Wrap the relevant subtree in `<SessionProvider>` (typically in your root layout):
+Use `useSession()` from `next-auth/react` in any client component (requires `<SessionProvider>` — see step 8):
 
 ```typescript
-// app/layout.tsx
-import { SessionProvider } from "next-auth/react";
-
-export default function RootLayout({ children }) {
-  return <SessionProvider>{children}</SessionProvider>;
-}
-```
-
-```typescript
-// Any client component
 "use client";
 import { useSession } from "next-auth/react";
 
@@ -308,7 +305,28 @@ export function UserGreeting() {
 
 > **Note:** `useSession()` reads the already-issued JWT from the browser — it does not make a new server call. Role enforcement must still happen server-side; never trust client-readable session data as a security boundary.
 
-## 8. Add a login page
+## 8. Wrap the root layout with `<SessionProvider>`
+
+`useSession()` and client-side session access require a `<SessionProvider>` ancestor. Add it to your root layout:
+
+```typescript
+// app/layout.tsx
+import { SessionProvider } from "next-auth/react";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+> **Why required?** Without `<SessionProvider>`, any component calling `useSession()` will throw a context error at runtime. The login page itself doesn't need it, but most app pages will.
+
+## 9. Add a login page
 
 The package includes a ready-to-use login form component. You can either use it directly or build your own.
 
@@ -338,9 +356,14 @@ The component accepts optional props:
 
 > **Why `/client`?** The `FileMakerLoginForm` uses React hooks (`useState`). It is published under the `./client` subpath export so bundlers can correctly resolve the `"use client"` boundary. Importing from the main package path will cause a Server Component error.
 
+> **Styling:** `FileMakerLoginForm` renders unstyled `<input>` and `<button>` elements — it ships with no CSS classes or inline styles. The `className` prop applies to the outer `<form>` tag only. How far you can go with Option A depends on your styling approach:
+> - **Plain CSS / CSS Modules** — works well. Standard descendant selectors (`form input`, `form button`) reach the component's internals from your login page's stylesheet.
+> - **Tailwind** — Tailwind's preflight normalizes the inputs and button to a consistent baseline. For further styling, use `className` on the form and descendant selectors in a CSS module alongside Tailwind, or switch to Option B where you can apply utility classes to every element directly.
+> - **Component libraries (MUI, Chakra, etc.)** — global resets (`CssBaseline`, etc.) apply, but the component's inputs and button won't inherit library component styles because they're plain HTML elements, not `TextField` or `Button`. The form will look out of place next to the rest of the app. Use Option B and build the form with your library's components instead.
+
 ### Option B: Build a custom login page
 
-If you need full control over the UI, create your own form that calls `signIn("filemaker", ...)` (replace `"filemaker"` with your custom ID if you set one):
+If you need full control over the UI — or if your app uses a component library — create your own form that calls `signIn("filemaker", ...)` (replace `"filemaker"` with your custom ID if you set one):
 
 ```typescript
 // app/login/page.tsx
@@ -380,22 +403,42 @@ export default function LoginPage() {
 }
 ```
 
-## 9. Add a sign-out action
+## 10. Add a sign-out button
 
-Call `signOut` from `next-auth/react` directly in any Client Component:
+After login, the user lands on the app's home page (`/`). Without this step there is no sign-out button visible anywhere. Create a `"use client"` component for the button, then add it to your existing home page:
 
 ```typescript
+// app/SignOutButton.tsx
 "use client";
 import { signOut } from "next-auth/react";
 
-// Minimal button
-<button onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
-
-// With a design-system component (e.g. MUI)
-<IconButton onClick={() => signOut({ callbackUrl: "/login" })}>
-  <LogoutIcon />
-</IconButton>
+export function SignOutButton() {
+  return (
+    <button onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
+  );
+}
 ```
+
+Then add it to your existing `app/page.tsx` — import `auth` and `SignOutButton`, make the function `async`, and drop `<SignOutButton />` wherever it fits in the existing layout:
+
+```typescript
+// app/page.tsx  (additions shown; keep your existing JSX)
+import { auth } from "@/auth";
+import { SignOutButton } from "./SignOutButton";
+
+export default async function Home() {
+  const session = await auth();
+
+  return (
+    <main>
+      {/* ...your existing page content... */}
+      <SignOutButton />
+    </main>
+  );
+}
+```
+
+> **Why two files?** `signOut` from `next-auth/react` is a client-side function. The page itself is a Server Component so it can call `auth()` directly. Keeping the button in a separate `"use client"` file maintains the server/client boundary.
 
 For server-side sign-out (e.g. from a Server Action), import `signOut` from `@/auth` instead:
 
@@ -407,7 +450,7 @@ export async function signOutAction() {
 }
 ```
 
-## 10. Rate limiting
+## 11. Rate limiting
 
 > **Warning:** Each login attempt opens **up to 3 Data API sessions** (user validation, service profile lookup, event logging). FileMaker Server has a finite session pool (default: 500 for FM Cloud). Without rate limiting, a brute-force attack can exhaust the session pool within minutes, locking out all Data API consumers — not just this app.
 
@@ -435,7 +478,7 @@ Implement rate limiting on the login route at the application level. Some option
 
 - **Middleware/proxy** — track login attempts by IP and block after a threshold.
 
-## 11. Client IP logging
+## 12. Client IP logging
 
 Failed sign-in events are logged with the client IP extracted from the `x-forwarded-for` or `x-real-ip` request headers. These headers are **trivially spoofable** unless your reverse proxy overwrites them from the actual TCP connection. To ensure accurate IP data in your event logs:
 
@@ -443,7 +486,7 @@ Failed sign-in events are logged with the client IP extracted from the `x-forwar
 - **nginx** — ensure your config includes `proxy_set_header X-Forwarded-For $remote_addr;` (not `$proxy_add_x_forwarded_for`, which preserves client-supplied values).
 - **No reverse proxy** — the logged IP will be whatever the client sends and should not be trusted for security decisions.
 
-## 12. Self-signed certificates (development only)
+## 13. Self-signed certificates (development only)
 
 > **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
 
@@ -471,8 +514,11 @@ Alternatively, set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local` (applies glo
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| `npm error notarget No matching version found for next-auth@^5` | No stable 5.x exists on npm yet | Pin the beta explicitly: `npm install "next-auth@5.0.0-beta.30"` (check npmjs.com for the latest beta) |
+| Auth API returns 500 / `TypeError: NextAuth is not a function` or destructuring yields `undefined` | `next-auth` v4 installed instead of v5 — v4's `NextAuth()` returns a handler directly, not `{ auth, handlers, ... }` | Reinstall with the pinned beta: `npm install "next-auth@5.0.0-beta.30"` |
 | Infinite redirect loop to `/login` | `authorized` callback dropped by `callbacks: { ... }` overwrite in `auth.ts` (Next.js 15 split-config pattern) | Spread `...authConfig.callbacks` before adding `jwt`/`session` callbacks |
-| Infinite redirect loop to `/login` (Next.js 16 `proxy.ts`) | Separate NextAuth instance created in `proxy.ts` — JWT signature mismatch | Use `import { auth } from "@/auth"; export default auth;` |
+| Infinite redirect loop to `/login` (Next.js 16 `proxy.ts`) | Separate NextAuth instance created in `proxy.ts` — JWT signature mismatch | Use `import { auth } from "@/auth"; export { auth as proxy };` |
+| `The Proxy file must export a function named "proxy" or a default function` | `auth` exported as default instead of named `proxy` | Change `export default auth` to `export { auth as proxy }` in `proxy.ts` |
 | `401` error on profile lookup after successful login | Wrong layout name — Data API layout names are case-sensitive | Verify `FM_IdP_USER_LAYOUT` matches the exact layout name in FileMaker (default: `DAPI_USER`) |
 | User authenticates but `projects` array is empty | Wrong portal name — portal names are case-sensitive | Verify `FM_IdP_PORTAL_NAME` matches the exact portal object name on the layout (default: `userProjectRole`) |
 | `ConfigurationError: Missing required environment variables` | Required `FM_IdP_*` env vars not set | Check that `FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, and `FM_IdP_SERVICE_PASSWORD` are all set in `.env.local` |
