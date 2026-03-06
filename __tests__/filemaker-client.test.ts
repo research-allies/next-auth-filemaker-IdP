@@ -371,4 +371,23 @@ describe("fmWriteEventLog", () => {
     ).resolves.toBeUndefined();
     expect(console.warn).toHaveBeenCalled();
   });
+
+  it("reuses existingToken and skips login/logout", async () => {
+    // Only one fetch call expected: the POST to create the record (no login, no logout)
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
+
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "IdP_eventlog" };
+    await fmWriteEventLog(config, { action: "signIn", idUser: "u001" }, "existing_tok");
+
+    // Should only have one fetch call (the record creation), not three (login + record + logout)
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/layouts/IdP_eventlog/records",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer existing_tok" }),
+      })
+    );
+  });
 });

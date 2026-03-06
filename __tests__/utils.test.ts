@@ -13,7 +13,7 @@ describe("sanitizeFmFindValue", () => {
   });
 
   it("strips single-character FM Find operators", () => {
-    expect(sanitizeFmFindValue("=!<>≤≥~*@#/\\")).toBe("");
+    expect(sanitizeFmFindValue("=!<>≤≥~*@#?/\\")).toBe("");
   });
 
   it("strips double-quote character", () => {

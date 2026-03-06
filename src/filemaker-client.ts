@@ -215,25 +215,32 @@ export async function fmFindUserWithPrivileges(
  * Writes an event log record to the configured FileMaker layout.
  * Fire-and-forget: logs warnings on failure but never throws.
  * No-op if `config.eventLogLayout` is undefined.
+ *
+ * @param existingToken - Optional service token to reuse. When provided, skips
+ *   login/logout — the caller is responsible for closing the session.
  */
 export async function fmWriteEventLog(
   config: FileMakerIdPConfig,
-  entry: EventLogEntry
+  entry: EventLogEntry,
+  existingToken?: string,
 ): Promise<void> {
   if (!config.eventLogLayout) return;
 
   // Cap event log timeout at 5s — these are fire-and-forget, so keep them short
   const eventTimeout = Math.min(config.timeout, 5000);
 
-  let token: string | undefined;
-  try {
-    token = await fmLogin(config, config.serviceUsername, config.servicePassword);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(
-      `[next-auth-filemaker-idp] fmWriteEventLog: service login failed — ${message}`
-    );
-    return;
+  const ownsToken = !existingToken;
+  let token = existingToken;
+  if (!token) {
+    try {
+      token = await fmLogin({ ...config, timeout: eventTimeout }, config.serviceUsername, config.servicePassword);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[next-auth-filemaker-idp] fmWriteEventLog: service login failed — ${message}`
+      );
+      return;
+    }
   }
 
   const baseUrl = buildDataApiBaseUrl(config);
@@ -273,7 +280,7 @@ export async function fmWriteEventLog(
     console.warn(`[next-auth-filemaker-idp] fmWriteEventLog: ${message}`);
   } finally {
     timeout.clear();
-    if (token) {
+    if (ownsToken && token) {
       void fmLogout(config, token);
     }
   }

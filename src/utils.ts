@@ -29,7 +29,7 @@ export function getFetch(config: FileMakerIdPConfig): typeof globalThis.fetch {
  * Strips single-character FileMaker Find operator characters from a string
  * as defense-in-depth when used in `_find` requests.
  *
- * Strips: `=` `!` `<` `>` `≤` `≥` `~` `*` `@` `#` `/` `\` `"`
+ * Strips: `=` `!` `<` `>` `≤` `≥` `~` `*` `@` `#` `?` `/` `\` `"`
  *
  * Note: multi-character operators (`==`, `...`, `//`) are neutralized by the
  * `==` exact-match prefix applied in the find query, so they need not be
@@ -37,5 +37,5 @@ export function getFetch(config: FileMakerIdPConfig): typeof globalThis.fetch {
  * outside of exact-match find contexts.
  */
 export function sanitizeFmFindValue(value: string): string {
-  return value.replace(/[=!<>≤≥~*@#/\\"]/g, "");
+  return value.replace(/[=!<>≤≥~*@#?/\\"]/g, "");
 }

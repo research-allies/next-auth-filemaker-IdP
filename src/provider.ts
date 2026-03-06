@@ -53,6 +53,9 @@ export function createFileMakerProvider(
         return null;
       }
 
+      const user = String(username);
+      const pass = String(password);
+
       const req = request as Request | undefined;
       const rawClientIp =
         req?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -63,7 +66,7 @@ export function createFileMakerProvider(
 
       // Step 1: Validate user credentials + open service session in parallel
       const [userResult, serviceResult] = await Promise.allSettled([
-        fmLogin(config, String(username), String(password)),
+        fmLogin(config, user, pass),
         fmLogin(config, config.serviceUsername, config.servicePassword),
       ]);
 
@@ -75,10 +78,9 @@ export function createFileMakerProvider(
             userResult.reason
           );
         }
-        if (serviceResult.status === "fulfilled") {
-          void fmLogout(config, serviceResult.value);
-        }
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: buildLoginError(userResult.reason) });
+        const svcToken = serviceResult.status === "fulfilled" ? serviceResult.value : undefined;
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(user)} sign in failed from reported IP ${clientIp}.`, error: buildLoginError(userResult.reason) }, svcToken)
+          .finally(() => { if (svcToken) void fmLogout(config, svcToken); });
         return null;
       }
 
@@ -91,34 +93,30 @@ export function createFileMakerProvider(
           "[next-auth-filemaker-idp] Service account login failed:",
           serviceResult.reason
         );
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Service account error" });
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(user)} sign in failed from reported IP ${clientIp}.`, error: "Service account error" });
         return null;
       }
 
       const serviceToken = serviceResult.value;
 
       // Steps 3–4: Find user profile + portal data, then close service session
-      let user: FileMakerUser;
       try {
         const { profile, projects } = await fmFindUserWithPrivileges(
           config,
           serviceToken,
-          String(username)
+          user
         );
-        user = { ...profile, projects };
+        void fmLogout(config, serviceToken);
+        return { ...profile, projects };
       } catch (err) {
         console.error(
           "[next-auth-filemaker-idp] User profile lookup failed:",
           err
         );
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Profile lookup failed" });
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(user)} sign in failed from reported IP ${clientIp}.`, error: "Profile lookup failed" }, serviceToken)
+          .finally(() => void fmLogout(config, serviceToken));
         return null;
-      } finally {
-        // Always close service session regardless of find success/failure
-        void fmLogout(config, serviceToken);
       }
-
-      return user;
     },
   });
 }

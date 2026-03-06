@@ -62,6 +62,7 @@ describe("createFileMakerProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFmLogout.mockResolvedValue(undefined);
+    mockFmWriteEventLog.mockResolvedValue(undefined);
   });
 
   it("returns FileMakerUser on full success", async () => {
@@ -185,7 +186,9 @@ describe("createFileMakerProvider — event logging on failure", () => {
   });
 
   it("calls fmWriteEventLog with 'Invalid credentials' on FileMakerAuthError", async () => {
-    mockFmLogin.mockRejectedValueOnce(new FileMakerAuthError());
+    mockFmLogin
+      .mockRejectedValueOnce(new FileMakerAuthError())  // user login
+      .mockResolvedValueOnce("svc_token");               // service login (parallel)
 
     await callAuthorize({ username: "jdoe", password: "wrong" });
 
@@ -193,11 +196,13 @@ describe("createFileMakerProvider — event logging on failure", () => {
       action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP unknown.",
       error: "Invalid credentials",
-    });
+    }, "svc_token");
   });
 
   it("calls fmWriteEventLog with error message + '(FileMaker error)' on generic FileMakerIdPError", async () => {
-    mockFmLogin.mockRejectedValueOnce(new FileMakerIdPError("server error"));
+    mockFmLogin
+      .mockRejectedValueOnce(new FileMakerIdPError("server error"))  // user login
+      .mockResolvedValueOnce("svc_token");                            // service login (parallel)
 
     await callAuthorize({ username: "jdoe", password: "pass" });
 
@@ -205,7 +210,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
       action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP unknown.",
       error: "server error (FileMaker error)",
-    });
+    }, "svc_token");
   });
 
   it("calls fmWriteEventLog with 'Service account error' when service login fails", async () => {
@@ -234,7 +239,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
       action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP unknown.",
       error: "Profile lookup failed",
-    });
+    }, "svc_token");
   });
 
   it("strips control characters from username in event log notes", async () => {
@@ -244,7 +249,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, expect.objectContaining({
       notes: "User jdoeinjected sign in failed from reported IP unknown.",
-    }));
+    }), undefined);
   });
 
   it("truncates long usernames to 20 chars in event log notes", async () => {
@@ -254,7 +259,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, expect.objectContaining({
       notes: "User averylongusernameabc sign in failed from reported IP unknown.",
-    }));
+    }), undefined);
   });
 
   it("does not call fmWriteEventLog on success", async () => {
