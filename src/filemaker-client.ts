@@ -247,7 +247,7 @@ export async function fmWriteEventLog(
     };
     if (entry.detail !== undefined) fieldData[eventLogFields.detailField] = entry.detail;
     if (entry.error !== undefined) fieldData[eventLogFields.errorField] = entry.error;
-    if (entry.foreignKeyId !== undefined) fieldData[eventLogFields.foreignKeyIdField] = entry.foreignKeyId;
+    if (entry.idUser !== undefined) fieldData[eventLogFields.idUserField] = entry.idUser;
     if (entry.notes !== undefined) fieldData[eventLogFields.notesField] = entry.notes;
 
     const response = await fetchFn(
@@ -289,7 +289,7 @@ export async function fmLogout(
 ): Promise<void> {
   const baseUrl = buildDataApiBaseUrl(config);
   const fetchFn = getFetch(config);
-  const timeout = withTimeout(config);
+  const timeout = withTimeout(config, Math.min(config.timeout, 5000));
 
   try {
     const response = await fetchFn(`${baseUrl}/sessions/${token}`, {

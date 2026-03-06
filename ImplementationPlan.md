@@ -217,10 +217,10 @@ Wire the FM Data API calls together into an Auth.js provider — the single piec
   - `authorize` callback:
     1. Validate credentials exist (return `null` immediately if missing)
     2. Extract reported client IP from request headers (`x-forwarded-for` → first segment, fallback `x-real-ip`)
-    3. Call `fmLogin(config, username, password)` — validates user identity; on `FileMakerAuthError` or any other error, call `fmWriteEventLog` (fire-and-forget) with `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`, then return `null`
+    3. Call `fmLogin` for both user and service account in parallel via `Promise.allSettled` — if user login fails (`FileMakerAuthError` or any other error), clean up any service token and call `fmWriteEventLog` (fire-and-forget) with `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`, then return `null`
     4. On successful user login, immediately call `fmLogout(config, userToken)` (fire-and-forget) — the token is discarded; the user's FM credentials are validated but their session is never retained
-    5. Call `fmLogin(config, serviceUsername, servicePassword)` — opens a service session for the profile query; if fails, call `fmWriteEventLog` with `{ scriptName: "signInFailed", notes: "...", error: "Service account error" }` then return `null`
-    6. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, call `fmWriteEventLog` with `{ scriptName: "signInFailed", notes: "...", error: "Profile lookup failed" }` then return `null`
+    5. If service login failed, call `fmWriteEventLog` with `{ action: "signInFailed", notes: "...", error: "Service account error" }` then return `null`
+    6. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, call `fmWriteEventLog` with `{ action: "signInFailed", notes: "...", error: "Profile lookup failed" }` then return `null`
     7. Call `fmLogout(config, serviceToken)` — close the service session in a `finally` block (fire-and-forget, runs on both success and failure of step 6)
     8. Return `FileMakerUser` object (identity + projects/roles only; no FM token stored)
 
@@ -296,11 +296,11 @@ Write Auth.js sign-in, sign-out, and failed sign-in events to the `IdP_eventlog`
 **New type: `EventLogEntry`** (`src/types.ts`):
 ```typescript
 interface EventLogEntry {
-  scriptName: string;    // event type: "signIn", "signOut", "signInFailed"
-  detail?: string;       // human-readable description
-  error?: string;        // error message on failure
-  foreignKeyId?: string; // user ID (fk_ForeignKeyID)
-  notes?: string;        // additional context
+  action: string;    // event type: "signIn", "signOut", "signInFailed"
+  detail?: string;   // human-readable description
+  error?: string;    // error message on failure
+  idUser?: string;   // user ID
+  notes?: string;    // additional context
 }
 ```
 
@@ -310,12 +310,12 @@ fmWriteEventLog(config, entry: EventLogEntry): Promise<void>
 ```
 - If `config.eventLogLayout` is undefined, returns immediately (no-op)
 - Opens service session (`fmLogin`), POSTs a new record to the event log layout, closes session (`fmLogout`)
-- POST body maps `EventLogEntry` fields to FM field names:
-  - `entry.scriptName` → `Script_Name`
-  - `entry.detail` → `Detail`
-  - `entry.error` → `Error`
-  - `entry.foreignKeyId` → `fk_ForeignKeyID`
-  - `entry.notes` → `Notes`
+- POST body maps `EventLogEntry` fields to FM field names via `config.eventLogFields`:
+  - `entry.action` → `eventLogFields.actionField`
+  - `entry.detail` → `eventLogFields.detailField`
+  - `entry.error` → `eventLogFields.errorField`
+  - `entry.idUser` → `eventLogFields.idUserField`
+  - `entry.notes` → `eventLogFields.notesField`
 - Fire-and-forget: `console.warn` on any failure, never throws
 
 **New factory: `createEventHandlers`** (`src/callbacks.ts`):
@@ -324,16 +324,16 @@ createEventHandlers(config: FileMakerIdPConfig): { signIn, signOut }
 ```
 - Returns Auth.js event handlers for use in the NextAuth `events` config
 - Uses the same `any`-cast pattern as `createJwtCallback` and `createSessionCallback`:
-  - `signIn({ user }: { user: any })` — cast `user as FileMakerUser` to access `user.id` and `user.userName`; writes `{ scriptName: "signIn", foreignKeyId: fmUser?.id, notes: "User {userName} signed in." }` (no PII in `detail`; username goes in `notes`)
-  - `signOut(message)` — accepts `{ session: any } | { token?: any }` union (Auth.js v5 sends either shape); extracts token via `"token" in message ? message.token : undefined`, casts as `FileMakerJWT | undefined`; writes `{ scriptName: "signOut", foreignKeyId: fmToken?.id, notes: "User {userName} signed out." }` (or `undefined` notes/foreignKeyId if token is absent)
+  - `signIn({ user }: { user: any })` — cast `user as FileMakerUser` to access `user.id` and `user.userName`; writes `{ action: "signIn", idUser: fmUser?.id, notes: "User {userName} signed in." }` (no PII in `detail`; username goes in `notes`)
+  - `signOut(message)` — accepts `{ session: any } | { token?: any }` union (Auth.js v5 sends either shape); extracts token via `"token" in message ? message.token : undefined`, casts as `FileMakerJWT | undefined`; writes `{ action: "signOut", idUser: fmToken?.id, notes: "User {userName} signed out." }` (or `undefined` notes/idUser if token is absent)
   > **Implementation note:** Auth.js v5 types `events.signOut` as `{ token?: JWT }`, so the handler must accept the broader `{ session: any } | { token?: any }` union and not rely on the destructure type annotation alone.
 - `FileMakerJWT` is defined in the same `callbacks.ts` module; imports `FileMakerIdPConfig` and `FileMakerUser` from `./types.js` and `fmWriteEventLog` from `./filemaker-client.js`
 
 **Provider changes** (`src/provider.ts`):
-- `authorize` already returns `null` on failure; add `void fmWriteEventLog(config, { ... })` (matching the existing `void fmLogout(...)` pattern) before each `return null`; username is passed through `safeLogValue()` and clientIp is extracted from request headers:
-  - User credential failure (both `FileMakerAuthError` and generic errors) → `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`
-  - Service account failure → `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Service account error" }`
-  - Profile lookup failure → `{ scriptName: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Profile lookup failed" }`
+- `authorize` runs user and service logins in parallel via `Promise.allSettled`; on failure, `void fmWriteEventLog(config, { ... })` is called (fire-and-forget) before returning `null`; username is passed through `safeLogValue()` and clientIp is extracted from request headers:
+  - User credential failure (both `FileMakerAuthError` and generic errors) → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`
+  - Service account failure → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Service account error" }`
+  - Profile lookup failure → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Profile lookup failed" }`
 
 **`src/index.ts`:** Export `createEventHandlers`, `fmWriteEventLog`, and `EventLogEntry` type
 

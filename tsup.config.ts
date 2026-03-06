@@ -3,9 +3,15 @@ import { readFileSync, writeFileSync } from "fs";
 
 function prependUseClient() {
   for (const file of ["dist/client.js", "dist/client.cjs"]) {
-    const content = readFileSync(file, "utf8");
-    if (!content.startsWith('"use client"')) {
-      writeFileSync(file, `"use client";\n${content}`);
+    try {
+      const content = readFileSync(file, "utf8");
+      if (!content.startsWith('"use client"')) {
+        writeFileSync(file, `"use client";\n${content}`);
+      }
+    } catch (err) {
+      throw new Error(
+        `prependUseClient: could not process ${file} — did the client entry build succeed?\n${err}`
+      );
     }
   }
 }

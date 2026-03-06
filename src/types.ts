@@ -65,7 +65,7 @@ export interface EventLogFieldMapping {
   /** Field for error messages. Default: `"error"` */
   errorField: string;
   /** Field for foreign key (user PK). Default: `"id_user"` */
-  foreignKeyIdField: string;
+  idUserField: string;
   /** Field for additional notes. Default: `"notes"` */
   notesField: string;
 }
@@ -75,14 +75,21 @@ export interface EventLogFieldMapping {
  * Fields map to FM field names via `fmWriteEventLog`.
  */
 export interface EventLogEntry {
-  /** Event type mapped to `eventLogFields.actionField`. One of `"signIn"`, `"signOut"`, `"signInFailed"`. */
+  /**
+   * Event type written to `eventLogFields.actionField`.
+   *
+   * Built-in values used by this package: `"signIn"`, `"signOut"`, `"signInFailed"`.
+   *
+   * Any string is accepted — consuming apps can pass custom action names
+   * (e.g. `"passwordReset"`, `"profileUpdated"`) when calling `fmWriteEventLog` directly.
+   */
   action: string;
   /** Human-readable description mapped to `eventLogFields.detailField` (e.g. username or email). */
   detail?: string;
   /** Error message mapped to `eventLogFields.errorField` (failure events only). */
   error?: string;
-  /** User PK mapped to `eventLogFields.foreignKeyIdField`. */
-  foreignKeyId?: string;
+  /** User PK written to `eventLogFields.idUserField`. */
+  idUser?: string;
   /** Additional context mapped to `eventLogFields.notesField`. */
   notes?: string;
 }

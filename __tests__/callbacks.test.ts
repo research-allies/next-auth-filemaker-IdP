@@ -144,7 +144,7 @@ describe("createEventHandlers", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
       action: "signIn",
-      foreignKeyId: "u001",
+      idUser: "u001",
       notes: "User jdoe signed in.",
     });
   });
@@ -155,7 +155,7 @@ describe("createEventHandlers", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
       action: "signOut",
-      foreignKeyId: "u001",
+      idUser: "u001",
       notes: "User jdoe signed out.",
     });
   });
@@ -166,7 +166,7 @@ describe("createEventHandlers", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
       action: "signOut",
-      foreignKeyId: undefined,
+      idUser: undefined,
       notes: undefined,
     });
   });
@@ -177,7 +177,7 @@ describe("createEventHandlers", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
       action: "signOut",
-      foreignKeyId: undefined,
+      idUser: undefined,
       notes: undefined,
     });
   });

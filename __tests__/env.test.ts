@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfigFromEnv } from "../src/env.js";
-import { ConfigurationError } from "../src/errors.js";
+import { ConfigurationError, FileMakerIdPError } from "../src/errors.js";
 
 const REQUIRED_ENV = {
   FM_IdP_HOST: "fm.example.com",
@@ -78,7 +78,7 @@ describe("loadConfigFromEnv", () => {
     expect(config.eventLogFields.actionField).toBe("action");
     expect(config.eventLogFields.detailField).toBe("detail");
     expect(config.eventLogFields.errorField).toBe("error");
-    expect(config.eventLogFields.foreignKeyIdField).toBe("id_user");
+    expect(config.eventLogFields.idUserField).toBe("id_user");
     expect(config.eventLogFields.notesField).toBe("notes");
     expect(config.eventLogLayout).toBeUndefined();
   });
@@ -122,14 +122,14 @@ describe("loadConfigFromEnv", () => {
       FM_IdP_EVENTLOG_FIELD_ACTION: "EventType",
       FM_IdP_EVENTLOG_FIELD_DETAIL: "Description",
       FM_IdP_EVENTLOG_FIELD_ERROR: "ErrorMsg",
-      FM_IdP_EVENTLOG_FIELD_USER_ID: "fk_UserID",
+      FM_IdP_EVENTLOG_FIELD_USER_ID: "UserID",
       FM_IdP_EVENTLOG_FIELD_NOTES: "Comments",
     });
     const config = loadConfigFromEnv();
     expect(config.eventLogFields.actionField).toBe("EventType");
     expect(config.eventLogFields.detailField).toBe("Description");
     expect(config.eventLogFields.errorField).toBe("ErrorMsg");
-    expect(config.eventLogFields.foreignKeyIdField).toBe("fk_UserID");
+    expect(config.eventLogFields.idUserField).toBe("UserID");
     expect(config.eventLogFields.notesField).toBe("Comments");
   });
 
@@ -187,5 +187,31 @@ describe("loadConfigFromEnv", () => {
     setEnv({ ...REQUIRED_ENV, FM_IdP_HOST: "FM.Example.com" });
     const config = loadConfigFromEnv();
     expect(config.host).toBe("fm.example.com");
+  });
+
+  it("throws FileMakerIdPError when FM_IdP_HOST includes a scheme", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_HOST: "https://fm.example.com" });
+    expect(() => loadConfigFromEnv()).toThrow(FileMakerIdPError);
+  });
+
+  it("throws FileMakerIdPError when FM_IdP_HOST includes a path", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_HOST: "fm.example.com/path" });
+    expect(() => loadConfigFromEnv()).toThrow(FileMakerIdPError);
+  });
+
+  it("throws FileMakerIdPError when FM_IdP_USE_HTTPS=false in production", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_USE_HTTPS: "false" });
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(() => loadConfigFromEnv()).toThrow(FileMakerIdPError);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("falls back to default timeout (10000) when FM_IdP_TIMEOUT is not a number", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_TIMEOUT: "abc" });
+    const config = loadConfigFromEnv();
+    expect(config.timeout).toBe(10000);
   });
 });

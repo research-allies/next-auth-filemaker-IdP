@@ -9,7 +9,10 @@
       "Bash(npm view next-auth versions --json)",
       "Bash(openssl rand -base64 32)",
       "Bash(npm run typecheck)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "Bash(npx vitest run __tests__/env.test.ts)",
+      "Bash(npx vitest run __tests__/provider.test.ts)",
+      "Bash(npx vitest run)"
     ]
   }
 }

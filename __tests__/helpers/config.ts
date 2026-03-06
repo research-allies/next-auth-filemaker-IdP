@@ -24,7 +24,7 @@ export const baseConfig: FileMakerIdPConfig = {
     actionField: "action",
     detailField: "detail",
     errorField: "error",
-    foreignKeyIdField: "id_user",
+    idUserField: "id_user",
     notesField: "notes",
   },
 };

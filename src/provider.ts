@@ -1,11 +1,22 @@
 import Credentials from "next-auth/providers/credentials";
 import type { FileMakerIdPConfig, FileMakerUser } from "./types.js";
 import { fmLogin, fmFindUserWithPrivileges, fmLogout, fmWriteEventLog } from "./filemaker-client.js";
-import { FileMakerAuthError } from "./errors.js";
+import { FileMakerAuthError, FileMakerIdPError } from "./errors.js";
 
 /** Truncate and strip control characters for safe log interpolation. */
 function safeLogValue(value: string, maxLength = 20): string {
   return value.slice(0, maxLength).replace(/[\x00-\x1f]/g, "");
+}
+
+/** Builds an event log error string from a caught value.
+ * FileMakerAuthError → "Invalid credentials"
+ * Other FileMakerIdPError → "{message} (FileMaker error)"
+ * Anything else → "{message}"
+ */
+function buildLoginError(err: unknown): string {
+  if (err instanceof FileMakerAuthError) return "Invalid credentials";
+  const message = err instanceof Error ? err.message : String(err);
+  return err instanceof FileMakerIdPError ? `${message} (FileMaker error)` : message;
 }
 
 /**
@@ -42,10 +53,13 @@ export function createFileMakerProvider(
         return null;
       }
 
-      const clientIp =
-        (request as Request | undefined)?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        (request as Request | undefined)?.headers?.get("x-real-ip") ??
+      const req = request as Request | undefined;
+      const rawClientIp =
+        req?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        req?.headers?.get("x-real-ip") ??
         undefined;
+      // Sanitize before log interpolation; 45 chars covers full IPv6 with port
+      const clientIp = rawClientIp !== undefined ? safeLogValue(rawClientIp, 45) : "unknown";
 
       // Step 1: Validate user credentials + open service session in parallel
       const [userResult, serviceResult] = await Promise.allSettled([
@@ -64,7 +78,7 @@ export function createFileMakerProvider(
         if (serviceResult.status === "fulfilled") {
           void fmLogout(config, serviceResult.value);
         }
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Invalid credentials" });
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: buildLoginError(userResult.reason) });
         return null;
       }
 

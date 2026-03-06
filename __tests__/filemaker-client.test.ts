@@ -168,6 +168,22 @@ describe("fmFindUserWithPrivileges", () => {
     expect(result.projects).toEqual([]);
   });
 
+  it("returns empty projects array when portalData key is absent entirely", async () => {
+    const recordMissingPortalKey = {
+      fieldData: userRecord.fieldData,
+      portalData: {},
+    };
+    const config = {
+      ...baseConfig,
+      fetch: makeFetch(200, {
+        response: { data: [recordMissingPortalKey] },
+        messages: [],
+      }),
+    };
+    const result = await fmFindUserWithPrivileges(config, "tok", "jdoe");
+    expect(result.projects).toEqual([]);
+  });
+
   it("throws FileMakerQueryError when FM returns error code 401 (no records)", async () => {
     const config = {
       ...baseConfig,
@@ -300,7 +316,7 @@ describe("fmWriteEventLog", () => {
     await fmWriteEventLog(config, {
       action: "signIn",
       detail: "jdoe@example.com",
-      foreignKeyId: "u001",
+      idUser: "u001",
     });
 
     expect(mockFetch).toHaveBeenCalledWith(

@@ -191,20 +191,20 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP undefined.",
+      notes: "User jdoe sign in failed from reported IP unknown.",
       error: "Invalid credentials",
     });
   });
 
-  it("calls fmWriteEventLog with 'Invalid credentials' on generic user login error", async () => {
+  it("calls fmWriteEventLog with error message + '(FileMaker error)' on generic FileMakerIdPError", async () => {
     mockFmLogin.mockRejectedValueOnce(new FileMakerIdPError("server error"));
 
     await callAuthorize({ username: "jdoe", password: "pass" });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP undefined.",
-      error: "Invalid credentials",
+      notes: "User jdoe sign in failed from reported IP unknown.",
+      error: "server error (FileMaker error)",
     });
   });
 
@@ -217,7 +217,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP undefined.",
+      notes: "User jdoe sign in failed from reported IP unknown.",
       error: "Service account error",
     });
   });
@@ -232,9 +232,29 @@ describe("createFileMakerProvider — event logging on failure", () => {
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
       action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP undefined.",
+      notes: "User jdoe sign in failed from reported IP unknown.",
       error: "Profile lookup failed",
     });
+  });
+
+  it("strips control characters from username in event log notes", async () => {
+    mockFmLogin.mockRejectedValueOnce(new FileMakerAuthError());
+
+    await callAuthorize({ username: "jdoe\x00injected", password: "wrong" });
+
+    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, expect.objectContaining({
+      notes: "User jdoeinjected sign in failed from reported IP unknown.",
+    }));
+  });
+
+  it("truncates long usernames to 20 chars in event log notes", async () => {
+    mockFmLogin.mockRejectedValueOnce(new FileMakerAuthError());
+
+    await callAuthorize({ username: "averylongusernameabcde", password: "wrong" });
+
+    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, expect.objectContaining({
+      notes: "User averylongusernameabc sign in failed from reported IP unknown.",
+    }));
   });
 
   it("does not call fmWriteEventLog on success", async () => {

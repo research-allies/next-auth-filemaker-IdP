@@ -79,7 +79,7 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     actionField: process.env.FM_IdP_EVENTLOG_FIELD_ACTION ?? "action",
     detailField: process.env.FM_IdP_EVENTLOG_FIELD_DETAIL ?? "detail",
     errorField: process.env.FM_IdP_EVENTLOG_FIELD_ERROR ?? "error",
-    foreignKeyIdField: process.env.FM_IdP_EVENTLOG_FIELD_USER_ID ?? "id_user",
+    idUserField: process.env.FM_IdP_EVENTLOG_FIELD_USER_ID ?? "id_user",
     notesField: process.env.FM_IdP_EVENTLOG_FIELD_NOTES ?? "notes",
   };
 
