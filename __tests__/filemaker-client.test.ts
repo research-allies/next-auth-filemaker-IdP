@@ -10,28 +10,7 @@ import {
   FileMakerQueryError,
   FileMakerIdPError,
 } from "../src/errors.js";
-import type { FileMakerIdPConfig } from "../src/types.js";
-
-const baseConfig: FileMakerIdPConfig = {
-  host: "fm.example.com",
-  database: "IdP_Accounts",
-  useHttps: true,
-  serviceUsername: "svc",
-  servicePassword: "svc_pass",
-  userLayout: "DAPI_USER",
-  timeout: 5000,
-  fields: {
-    idUserField: "id_user",
-    usernameField: "userName",
-    nameFirstField: "nameFirst",
-    nameLastField: "nameLast",
-    emailField: "email",
-    portalName: "userProjectRole",
-    projectIdField: "project::id_project",
-    projectNameField: "project::projectName",
-    roleNameField: "role::roleName",
-  },
-};
+import { baseConfig } from "./helpers/config.js";
 
 function makeFetch(status: number, body: unknown): typeof globalThis.fetch {
   return vi.fn().mockResolvedValue({
@@ -237,7 +216,7 @@ describe("fmFindUserWithPrivileges", () => {
     await fmFindUserWithPrivileges(config, "myToken", "jdoe");
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/layouts/DAPI_USER/_find",
+      "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/layouts/IdP_user/_find",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -305,7 +284,7 @@ describe("fmWriteEventLog", () => {
     const config = { ...baseConfig, fetch: mockFetch };
     // eventLogLayout is not set on baseConfig
     await expect(
-      fmWriteEventLog(config, { scriptName: "signIn" })
+      fmWriteEventLog(config, { action: "signIn" })
     ).resolves.toBeUndefined();
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -317,23 +296,23 @@ describe("fmWriteEventLog", () => {
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) })
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
 
-    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "IdP_eventlog" };
     await fmWriteEventLog(config, {
-      scriptName: "signIn",
+      action: "signIn",
       detail: "jdoe@example.com",
       foreignKeyId: "u001",
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/layouts/DAPI_EVENTLOG/records",
+      "https://fm.example.com/fmi/data/vLatest/databases/IdP_Accounts/layouts/IdP_eventlog/records",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ Authorization: "Bearer svc_tok" }),
         body: JSON.stringify({
           fieldData: {
-            Script_Name: "signIn",
-            Detail: "jdoe@example.com",
-            fk_ForeignKeyID: "u001",
+            action: "signIn",
+            detail: "jdoe@example.com",
+            id_user: "u001",
           },
         }),
       })
@@ -346,9 +325,9 @@ describe("fmWriteEventLog", () => {
       .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) })
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
 
-    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "IdP_eventlog" };
     await expect(
-      fmWriteEventLog(config, { scriptName: "signInFailed", error: "Invalid credentials" })
+      fmWriteEventLog(config, { action: "signInFailed", error: "Invalid credentials" })
     ).resolves.toBeUndefined();
     expect(console.warn).toHaveBeenCalled();
   });
@@ -357,9 +336,9 @@ describe("fmWriteEventLog", () => {
     const mockFetch = vi.fn()
       .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ messages: [{ code: "212", message: "Invalid" }] }) }) as unknown as typeof globalThis.fetch;
 
-    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "IdP_eventlog" };
     await expect(
-      fmWriteEventLog(config, { scriptName: "signIn" })
+      fmWriteEventLog(config, { action: "signIn" })
     ).resolves.toBeUndefined();
     expect(console.warn).toHaveBeenCalled();
   });
@@ -370,9 +349,9 @@ describe("fmWriteEventLog", () => {
       .mockRejectedValueOnce(new Error("network down"))
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) }) as unknown as typeof globalThis.fetch;
 
-    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "DAPI_EVENTLOG" };
+    const config = { ...baseConfig, fetch: mockFetch, eventLogLayout: "IdP_eventlog" };
     await expect(
-      fmWriteEventLog(config, { scriptName: "signOut" })
+      fmWriteEventLog(config, { action: "signOut" })
     ).resolves.toBeUndefined();
     expect(console.warn).toHaveBeenCalled();
   });

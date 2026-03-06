@@ -53,9 +53,9 @@ AUTH_SECRET=<paste generated secret here>
 
 # ── Optional (defaults shown) ────────────────────────────────
 FM_IdP_USE_HTTPS=true
-FM_IdP_USER_LAYOUT=DAPI_USER
+FM_IdP_USER_LAYOUT=IdP_user
 FM_IdP_TIMEOUT=10000                                # request timeout in milliseconds
-# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG             # omit or leave blank to disable event logging
+# FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog             # omit or leave blank to disable event logging
 
 # Field names — only set if your schema differs from defaults
 FM_IdP_FIELD_ID_USER=id_user
@@ -478,6 +478,8 @@ Implement rate limiting on the login route at the application level. Some option
 
 - **Middleware/proxy** — track login attempts by IP and block after a threshold.
 
+> **Performance tip:** Each `fmWriteEventLog` call (triggered by `createEventHandlers`) opens its own service session (login → write → logout). If your app logs a high volume of auth events, you can reduce this overhead by caching the service account token in your `auth.ts` with a short TTL (e.g. 60 seconds) and passing it via the `fetch` override or a wrapper around `fmWriteEventLog`. The package intentionally does not do this internally — a stateful token cache belongs in the consuming app where session lifetime, concurrency, and invalidation strategy can be tailored to the deployment.
+
 ## 12. Client IP logging
 
 Failed sign-in events are logged with the client IP extracted from the `x-forwarded-for` or `x-real-ip` request headers. These headers are **trivially spoofable** unless your reverse proxy overwrites them from the actual TCP connection. To ensure accurate IP data in your event logs:
@@ -519,8 +521,9 @@ Alternatively, set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local` (applies glo
 | Infinite redirect loop to `/login` | `authorized` callback dropped by `callbacks: { ... }` overwrite in `auth.ts` (Next.js 15 split-config pattern) | Spread `...authConfig.callbacks` before adding `jwt`/`session` callbacks |
 | Infinite redirect loop to `/login` (Next.js 16 `proxy.ts`) | Separate NextAuth instance created in `proxy.ts` — JWT signature mismatch | Use `import { auth } from "@/auth"; export { auth as proxy };` |
 | `The Proxy file must export a function named "proxy" or a default function` | `auth` exported as default instead of named `proxy` | Change `export default auth` to `export { auth as proxy }` in `proxy.ts` |
-| `401` error on profile lookup after successful login | Wrong layout name — Data API layout names are case-sensitive | Verify `FM_IdP_USER_LAYOUT` matches the exact layout name in FileMaker (default: `DAPI_USER`) |
+| `401` error on profile lookup after successful login | Wrong layout name — Data API layout names are case-sensitive | Verify `FM_IdP_USER_LAYOUT` matches the exact layout name in FileMaker (default: `IdP_user`) |
 | User authenticates but `projects` array is empty | Wrong portal name — portal names are case-sensitive | Verify `FM_IdP_PORTAL_NAME` matches the exact portal object name on the layout (default: `userProjectRole`) |
+| `401` on login even with correct credentials | Account's privilege set missing the `fmrest` extended privilege | In FileMaker, enable the `fmrest` extended privilege on the account's privilege set — without it the Data API rejects all sessions for that account |
 | `ConfigurationError: Missing required environment variables` | Required `FM_IdP_*` env vars not set | Check that `FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, and `FM_IdP_SERVICE_PASSWORD` are all set in `.env.local` |
 | `FileMakerAuthError: Invalid FileMaker credentials` | Service account credentials are wrong, or user credentials are wrong | For service account errors (during profile lookup), check `FM_IdP_SERVICE_USERNAME`/`FM_IdP_SERVICE_PASSWORD`. For user errors, the login form will show an error message. |
 | Session data missing fields (e.g., `userName` is `undefined`) | Type augmentation not set up, or JWT callback not wired | Ensure `types/next-auth.d.ts` exists (step 6) and `createJwtCallback()` + `createSessionCallback()` are both in the `callbacks` object |

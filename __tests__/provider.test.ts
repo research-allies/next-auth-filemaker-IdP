@@ -5,7 +5,7 @@ import {
   FileMakerQueryError,
   FileMakerIdPError,
 } from "../src/errors.js";
-import type { FileMakerIdPConfig } from "../src/types.js";
+import { baseConfig as config } from "./helpers/config.js";
 
 // Mock the filemaker-client module
 vi.mock("../src/filemaker-client.js", () => ({
@@ -26,27 +26,6 @@ const mockFmLogin = vi.mocked(fmLogin);
 const mockFmFindUser = vi.mocked(fmFindUserWithPrivileges);
 const mockFmLogout = vi.mocked(fmLogout);
 const mockFmWriteEventLog = vi.mocked(fmWriteEventLog);
-
-const config: FileMakerIdPConfig = {
-  host: "fm.example.com",
-  database: "IdP_Accounts",
-  useHttps: true,
-  serviceUsername: "svc_user",
-  servicePassword: "svc_pass",
-  userLayout: "DAPI_USER",
-  timeout: 5000,
-  fields: {
-    idUserField: "id_user",
-    usernameField: "userName",
-    nameFirstField: "nameFirst",
-    nameLastField: "nameLast",
-    emailField: "email",
-    portalName: "userProjectRole",
-    projectIdField: "project::id_project",
-    projectNameField: "project::projectName",
-    roleNameField: "role::roleName",
-  },
-};
 
 const mockProfile = {
   id: "u001",
@@ -71,6 +50,11 @@ async function callAuthorize(
   const provider = createFileMakerProvider(config);
   // @ts-expect-error — options is an internal @auth/core property
   const authorize = provider.options?.authorize ?? provider.authorize;
+  if (typeof authorize !== "function") {
+    throw new Error(
+      "Could not resolve authorize from provider — @auth/core internals may have changed"
+    );
+  }
   return authorize(credentials, new Request("http://localhost"));
 }
 
@@ -104,20 +88,27 @@ describe("createFileMakerProvider", () => {
   });
 
   it("returns null on FileMakerAuthError (bad user credentials)", async () => {
-    mockFmLogin.mockRejectedValueOnce(new FileMakerAuthError());
+    mockFmLogin
+      .mockRejectedValueOnce(new FileMakerAuthError())  // user login
+      .mockResolvedValueOnce("svc_token");               // service login (parallel)
 
     const result = await callAuthorize({ username: "jdoe", password: "wrong" });
     expect(result).toBeNull();
-    // Service login should NOT have been called
-    expect(mockFmLogin).toHaveBeenCalledTimes(1);
+    // Both logins fire in parallel, so fmLogin is called twice
+    expect(mockFmLogin).toHaveBeenCalledTimes(2);
+    // Service token should be cleaned up
+    expect(mockFmLogout).toHaveBeenCalledWith(config, "svc_token");
   });
 
   it("returns null on generic error during user login", async () => {
-    mockFmLogin.mockRejectedValueOnce(new FileMakerIdPError("server error"));
+    mockFmLogin
+      .mockRejectedValueOnce(new FileMakerIdPError("server error"))  // user login
+      .mockResolvedValueOnce("svc_token");                            // service login (parallel)
 
     const result = await callAuthorize({ username: "jdoe", password: "pass" });
     expect(result).toBeNull();
-    expect(mockFmLogin).toHaveBeenCalledTimes(1);
+    expect(mockFmLogin).toHaveBeenCalledTimes(2);
+    expect(mockFmLogout).toHaveBeenCalledWith(config, "svc_token");
   });
 
   it("discards user token (calls fmLogout) after user login", async () => {
@@ -199,7 +190,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
     await callAuthorize({ username: "jdoe", password: "wrong" });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      scriptName: "signInFailed",
+      action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Invalid credentials",
     });
@@ -211,7 +202,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
     await callAuthorize({ username: "jdoe", password: "pass" });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      scriptName: "signInFailed",
+      action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Invalid credentials",
     });
@@ -225,7 +216,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
     await callAuthorize({ username: "jdoe", password: "pass" });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      scriptName: "signInFailed",
+      action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Service account error",
     });
@@ -240,7 +231,7 @@ describe("createFileMakerProvider — event logging on failure", () => {
     await callAuthorize({ username: "jdoe", password: "pass" });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      scriptName: "signInFailed",
+      action: "signInFailed",
       notes: "User jdoe sign in failed from reported IP undefined.",
       error: "Profile lookup failed",
     });

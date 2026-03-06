@@ -2,6 +2,7 @@
 export type {
   FileMakerIdPConfig,
   FieldMapping,
+  EventLogFieldMapping,
   UserProfile,
   FileMakerUser,
   ProjectAssignment,
@@ -37,5 +38,3 @@ export {
   fmFindUserWithPrivileges,
   fmWriteEventLog,
 } from "./filemaker-client.js";
-
-// Login form component — import from "@research-allies/next-auth-filemaker-idp/client"

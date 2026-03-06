@@ -8,7 +8,7 @@
  * credentials to the browser.
  */
 
-import type { FileMakerIdPConfig, FieldMapping } from "./types.js";
+import type { FileMakerIdPConfig, FieldMapping, EventLogFieldMapping } from "./types.js";
 import { ConfigurationError, FileMakerIdPError } from "./errors.js";
 
 const REQUIRED_VARS = [
@@ -35,8 +35,9 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     throw new ConfigurationError(missing);
   }
 
-  // Validate host is a bare hostname (optionally with port), not a URL or path
-  const rawHost = process.env.FM_IdP_HOST!;
+  // Validate host is a bare hostname (optionally with port), not a URL or path.
+  // Normalize to lowercase — hostnames are case-insensitive and URL() lowercases them.
+  const rawHost = process.env.FM_IdP_HOST!.toLowerCase();
   try {
     const parsed = new URL(`https://${rawHost}`);
     if (parsed.host !== rawHost) {
@@ -44,7 +45,7 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     }
   } catch {
     throw new FileMakerIdPError(
-      `FM_IdP_HOST must be a hostname (e.g. "fm.example.com"), got: "${rawHost}"`
+      `FM_IdP_HOST must be a hostname (e.g. "fm.example.com"), got: "${process.env.FM_IdP_HOST}"`
     );
   }
 
@@ -74,16 +75,25 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     : 10000;
   const timeout = Number.isNaN(envTimeout) ? 10000 : envTimeout;
 
+  const eventLogFields: EventLogFieldMapping = {
+    actionField: process.env.FM_IdP_EVENTLOG_FIELD_ACTION ?? "action",
+    detailField: process.env.FM_IdP_EVENTLOG_FIELD_DETAIL ?? "detail",
+    errorField: process.env.FM_IdP_EVENTLOG_FIELD_ERROR ?? "error",
+    foreignKeyIdField: process.env.FM_IdP_EVENTLOG_FIELD_USER_ID ?? "id_user",
+    notesField: process.env.FM_IdP_EVENTLOG_FIELD_NOTES ?? "notes",
+  };
+
   const eventLogLayout = process.env.FM_IdP_EVENT_LOG_LAYOUT || undefined;
 
   return {
-    host: process.env.FM_IdP_HOST!,
+    host: rawHost,
     database: process.env.FM_IdP_DATABASE!,
     useHttps,
     serviceUsername: process.env.FM_IdP_SERVICE_USERNAME!,
     servicePassword: process.env.FM_IdP_SERVICE_PASSWORD!,
-    userLayout: process.env.FM_IdP_USER_LAYOUT ?? "DAPI_USER",
+    userLayout: process.env.FM_IdP_USER_LAYOUT ?? "IdP_user",
     fields,
+    eventLogFields,
     timeout,
     eventLogLayout,
     ...overrides,

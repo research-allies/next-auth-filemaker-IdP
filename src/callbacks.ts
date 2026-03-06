@@ -87,7 +87,7 @@ export function createEventHandlers(config: FileMakerIdPConfig) {
     signIn({ user }: { user: any }) {
       const fmUser = user as FileMakerUser;
       void fmWriteEventLog(config, {
-        scriptName: "signIn",
+        action: "signIn",
         foreignKeyId: fmUser?.id,
         notes: fmUser?.userName ? `User ${fmUser.userName} signed in.` : undefined,
       });
@@ -96,7 +96,7 @@ export function createEventHandlers(config: FileMakerIdPConfig) {
     signOut(message: { session: any } | { token?: any }) {
       const fmToken = ("token" in message ? message.token : undefined) as FileMakerJWT | undefined;
       void fmWriteEventLog(config, {
-        scriptName: "signOut",
+        action: "signOut",
         foreignKeyId: fmToken?.id,
         notes: fmToken?.userName ? `User ${fmToken.userName} signed out.` : undefined,
       });

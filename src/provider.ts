@@ -13,8 +13,8 @@ function safeLogValue(value: string, maxLength = 20): string {
  * users against FileMaker Server.
  *
  * Auth flow:
- * 1. Validate user credentials via fmLogin (token immediately discarded)
- * 2. Open a service session for profile/privilege lookup
+ * 1. Validate user credentials + open service session in parallel
+ * 2. Discard user token (identity validated), keep service token
  * 3. Find user profile + portal data (project/role assignments)
  * 4. Close service session (fire-and-forget)
  * 5. Return FileMakerUser (identity + projects only — no FM token)
@@ -47,42 +47,41 @@ export function createFileMakerProvider(
         (request as Request | undefined)?.headers?.get("x-real-ip") ??
         undefined;
 
-      // Step 1: Validate user credentials (token is immediately discarded)
-      let userToken: string;
-      try {
-        userToken = await fmLogin(config, String(username), String(password));
-      } catch (err) {
-        if (err instanceof FileMakerAuthError) {
-          void fmWriteEventLog(config, { scriptName: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Invalid credentials" });
-          return null;
+      // Step 1: Validate user credentials + open service session in parallel
+      const [userResult, serviceResult] = await Promise.allSettled([
+        fmLogin(config, String(username), String(password)),
+        fmLogin(config, config.serviceUsername, config.servicePassword),
+      ]);
+
+      // If user login failed, clean up any service token and bail
+      if (userResult.status === "rejected") {
+        if (!(userResult.reason instanceof FileMakerAuthError)) {
+          console.error(
+            "[next-auth-filemaker-idp] User credential validation failed:",
+            userResult.reason
+          );
         }
-        console.error(
-          "[next-auth-filemaker-idp] User credential validation failed:",
-          err
-        );
-        void fmWriteEventLog(config, { scriptName: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Invalid credentials" });
+        if (serviceResult.status === "fulfilled") {
+          void fmLogout(config, serviceResult.value);
+        }
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Invalid credentials" });
         return null;
       }
 
       // Discard user token immediately — we only needed it to validate identity
-      void fmLogout(config, userToken);
+      void fmLogout(config, userResult.value);
 
-      // Step 2: Open service session for profile/privilege lookup
-      let serviceToken: string;
-      try {
-        serviceToken = await fmLogin(
-          config,
-          config.serviceUsername,
-          config.servicePassword
-        );
-      } catch (err) {
+      // If service login failed, bail
+      if (serviceResult.status === "rejected") {
         console.error(
           "[next-auth-filemaker-idp] Service account login failed:",
-          err
+          serviceResult.reason
         );
-        void fmWriteEventLog(config, { scriptName: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Service account error" });
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Service account error" });
         return null;
       }
+
+      const serviceToken = serviceResult.value;
 
       // Steps 3–4: Find user profile + portal data, then close service session
       let user: FileMakerUser;
@@ -98,7 +97,7 @@ export function createFileMakerProvider(
           "[next-auth-filemaker-idp] User profile lookup failed:",
           err
         );
-        void fmWriteEventLog(config, { scriptName: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Profile lookup failed" });
+        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(String(username))} sign in failed from reported IP ${clientIp}.`, error: "Profile lookup failed" });
         return null;
       } finally {
         // Always close service session regardless of find success/failure

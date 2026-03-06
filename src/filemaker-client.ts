@@ -13,10 +13,11 @@ import {
 
 /**
  * Creates an AbortController with a timeout. Call `clear()` in a finally block.
+ * @param timeoutMs - Override the config timeout (e.g. for fire-and-forget paths).
  */
-function withTimeout(config: FileMakerIdPConfig) {
+function withTimeout(config: FileMakerIdPConfig, timeoutMs?: number) {
   const controller = new AbortController();
-  const timerId = setTimeout(() => controller.abort(), config.timeout);
+  const timerId = setTimeout(() => controller.abort(), timeoutMs ?? config.timeout);
   return { signal: controller.signal, clear: () => clearTimeout(timerId) };
 }
 
@@ -221,7 +222,10 @@ export async function fmWriteEventLog(
 ): Promise<void> {
   if (!config.eventLogLayout) return;
 
-  let token: string;
+  // Cap event log timeout at 5s — these are fire-and-forget, so keep them short
+  const eventTimeout = Math.min(config.timeout, 5000);
+
+  let token: string | undefined;
   try {
     token = await fmLogin(config, config.serviceUsername, config.servicePassword);
   } catch (err) {
@@ -234,16 +238,17 @@ export async function fmWriteEventLog(
 
   const baseUrl = buildDataApiBaseUrl(config);
   const fetchFn = getFetch(config);
-  const timeout = withTimeout(config);
+  const timeout = withTimeout(config, eventTimeout);
 
   try {
+    const { eventLogFields } = config;
     const fieldData: Record<string, string> = {
-      Script_Name: entry.scriptName,
+      [eventLogFields.actionField]: entry.action,
     };
-    if (entry.detail !== undefined) fieldData.Detail = entry.detail;
-    if (entry.error !== undefined) fieldData.Error = entry.error;
-    if (entry.foreignKeyId !== undefined) fieldData.fk_ForeignKeyID = entry.foreignKeyId;
-    if (entry.notes !== undefined) fieldData.Notes = entry.notes;
+    if (entry.detail !== undefined) fieldData[eventLogFields.detailField] = entry.detail;
+    if (entry.error !== undefined) fieldData[eventLogFields.errorField] = entry.error;
+    if (entry.foreignKeyId !== undefined) fieldData[eventLogFields.foreignKeyIdField] = entry.foreignKeyId;
+    if (entry.notes !== undefined) fieldData[eventLogFields.notesField] = entry.notes;
 
     const response = await fetchFn(
       `${baseUrl}/layouts/${encodeURIComponent(config.eventLogLayout)}/records`,

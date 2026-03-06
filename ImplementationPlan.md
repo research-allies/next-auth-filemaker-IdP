@@ -35,7 +35,7 @@ next-auth-filemaker-IdP/
 │   ├── provider.test.ts
 │   └── callbacks.test.ts
 ├── scripts/
-│   └── inspect-eventlog.ts   # Dev utility: probes DAPI_EVENTLOG field names against a live FM server (not published)
+│   └── inspect-eventlog.ts   # Dev utility: probes IdP_eventlog field names against a live FM server (not published)
 ├── package.json
 ├── tsconfig.json
 ├── tsup.config.ts            # Dual CJS/ESM build
@@ -77,7 +77,7 @@ Define the data shapes and configuration options that every other module depends
 - `useHttps` ← `FM_IdP_USE_HTTPS` (default `true`)
 - `serviceUsername` ← `FM_IdP_SERVICE_USERNAME` — Backend service account for profile/privilege queries
 - `servicePassword` ← `FM_IdP_SERVICE_PASSWORD` — Backend service account password
-- `userLayout` ← `FM_IdP_USER_LAYOUT` (default `"DAPI_USER"`) — Data API layout name for user profile + portal
+- `userLayout` ← `FM_IdP_USER_LAYOUT` (default `"IdP_user"`) — Data API layout name for user profile + portal
 - `fields` — FieldMapping (see below)
 - `timeout` ← `FM_IdP_TIMEOUT` (default `10000`) — request timeout in milliseconds for all fetch calls
 - `fetch?: typeof globalThis.fetch` — programmatic override only (not from env), for self-signed cert handling
@@ -109,7 +109,7 @@ FM_IdP_SERVICE_PASSWORD=
 AUTH_SECRET=
 
 # Data API layout for user profile lookup (includes userProjectRole portal)
-FM_IdP_USER_LAYOUT=DAPI_USER
+FM_IdP_USER_LAYOUT=IdP_user
 
 # Request timeout in milliseconds (default: 10000)
 FM_IdP_TIMEOUT=10000
@@ -128,7 +128,7 @@ FM_IdP_FIELD_PROJECT_NAME=project::projectName
 FM_IdP_FIELD_ROLE_NAME=role::roleName
 
 # Event logging — set to your event log layout name to enable; omit or leave blank to disable
-# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG
+# FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog
 ```
 
 **`UserProfile`** (identity-only; returned as the `profile` field from `fmFindUserWithPrivileges`):
@@ -273,7 +273,7 @@ Re-exports `FileMakerLoginForm` and `FileMakerLoginFormProps`. The `"use client"
 
 ### Step 10: Event logging to FileMaker
 
-Write Auth.js sign-in, sign-out, and failed sign-in events to the `DAPI_EVENTLOG` layout in FileMaker, giving administrators a server-side audit trail of authentication activity.
+Write Auth.js sign-in, sign-out, and failed sign-in events to the `IdP_eventlog` layout in FileMaker, giving administrators a server-side audit trail of authentication activity.
 
 **Key decisions:**
 - Fire-and-forget — event writes never block or throw; failures are logged as warnings only
@@ -284,7 +284,7 @@ Write Auth.js sign-in, sign-out, and failed sign-in events to the `DAPI_EVENTLOG
 
 **New env var (add to `.env.example`, commented out by default):**
 ```
-# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG
+# FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog
 ```
 
 **`FileMakerIdPConfig` changes** (`src/types.ts`):

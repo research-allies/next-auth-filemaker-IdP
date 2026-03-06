@@ -5,10 +5,10 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 ## How it works
 
 1. User submits credentials → FileMaker Data API validates them (session token immediately discarded)
-2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `DAPI_USER` layout (with `userProjectRole` portal)
+2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `IdP_user` layout (with `userProjectRole` portal)
 3. The service session is closed
 4. A JWT is issued containing identity fields and `projects: ProjectAssignment[]` — no FileMaker tokens ever stored in the JWT
-5. Authentication events (sign-in, sign-out, failed sign-in) are written to the `DAPI_EVENTLOG` layout in FileMaker, providing a server-side audit trail — opt-in via `FM_IdP_EVENT_LOG_LAYOUT`
+5. Authentication events (sign-in, sign-out, failed sign-in) are written to the `IdP_eventlog` layout in FileMaker, providing a server-side audit trail — opt-in via `FM_IdP_EVENT_LOG_LAYOUT`
 
 ## FileMaker files
 
@@ -38,13 +38,15 @@ Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-all
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-This package requires **Auth.js v5** (`next-auth ^5`) along with `react` and `react-dom` as peer dependencies. If your app doesn't have them yet, install everything together:
+This package requires **Auth.js v5** (`next-auth ^5`) along with `react` and `react-dom` as peer dependencies. Auth.js v5 is still in beta — there is no stable `5.x` release on npm yet, so you must pin the beta explicitly:
 
 ```bash
-npm install next-auth @research-allies/next-auth-filemaker-idp
+npm install "next-auth@5.0.0-beta.30" @research-allies/next-auth-filemaker-idp
 ```
 
-If `next-auth` is already installed:
+> **Why pin the beta?** `npm install next-auth` resolves to the latest stable release (v4), which uses a different API and is incompatible with this package. Pin to the latest beta listed at [npmjs.com/package/next-auth](https://www.npmjs.com/package/next-auth?activeTab=versions).
+
+If `next-auth` v5 is already installed:
 
 ```bash
 npm install @research-allies/next-auth-filemaker-idp
@@ -68,9 +70,9 @@ AUTH_SECRET=<random-secret>           # generate: openssl rand -base64 32
 
 # Optional — defaults shown
 FM_IdP_USE_HTTPS=true
-FM_IdP_USER_LAYOUT=DAPI_USER
+FM_IdP_USER_LAYOUT=IdP_user
 FM_IdP_TIMEOUT=10000
-# FM_IdP_EVENT_LOG_LAYOUT=DAPI_EVENTLOG   # omit or leave blank to disable event logging
+# FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog   # omit or leave blank to disable event logging
 
 # Field names — only set if your schema differs from the defaults
 FM_IdP_FIELD_ID_USER=id_user
@@ -184,15 +186,10 @@ Create `types/next-auth.d.ts` in your app to extend Auth.js types with the FileM
 
 ```typescript
 import { DefaultSession } from "next-auth";
-import { ProjectAssignment } from "@research-allies/next-auth-filemaker-idp";
+import { FileMakerUser, ProjectAssignment } from "@research-allies/next-auth-filemaker-idp";
 
 declare module "next-auth" {
-  interface User {
-    userName: string;
-    nameFirst: string;
-    nameLast: string;
-    projects: ProjectAssignment[];
-  }
+  interface User extends FileMakerUser {}
 
   interface Session {
     user: {
@@ -266,6 +263,57 @@ export default function LoginPage() {
 
 ---
 
+## Session provider
+
+`useSession()` and client-side session access require a `<SessionProvider>` ancestor. Add it to your root layout:
+
+```typescript
+// app/layout.tsx
+import { SessionProvider } from "next-auth/react";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <SessionProvider>{children}</SessionProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+> Without `<SessionProvider>`, any component calling `useSession()` will throw a context error at runtime.
+
+---
+
+## Sign out
+
+Create a client component for the sign-out button, then add it to any page:
+
+```typescript
+// app/SignOutButton.tsx
+"use client";
+import { signOut } from "next-auth/react";
+
+export function SignOutButton() {
+  return (
+    <button onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
+  );
+}
+```
+
+For server-side sign-out (e.g. from a Server Action), import `signOut` from `@/auth` instead:
+
+```typescript
+import { signOut } from "@/auth";
+
+export async function signOutAction() {
+  await signOut({ redirectTo: "/login" });
+}
+```
+
+---
+
 ## Protecting routes
 
 ### Next.js 16+: `proxy.ts`
@@ -274,7 +322,7 @@ export default function LoginPage() {
 // src/proxy.ts
 import { auth } from "@/auth";
 
-export default auth;
+export { auth as proxy };
 
 export const config = {
   matcher: [
@@ -328,7 +376,7 @@ export default async function AdminPage({ params }: { params: Promise<{ projectI
 | `FM_IdP_SERVICE_PASSWORD` | ✅ | — | Service account password |
 | `AUTH_SECRET` | ✅ | — | Auth.js encryption secret (standard NextAuth env var) |
 | `FM_IdP_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
-| `FM_IdP_USER_LAYOUT` | | `DAPI_USER` | Layout name for user profile + portal |
+| `FM_IdP_USER_LAYOUT` | | `IdP_user` | Layout name for user profile + portal |
 | `FM_IdP_TIMEOUT` | | `10000` | Request timeout in ms |
 | `FM_IdP_EVENT_LOG_LAYOUT` | | *(disabled)* | Layout name for auth event log writes; omit or leave blank to disable |
 | `FM_IdP_FIELD_ID_USER` | | `id_user` | User table PK field |
@@ -366,6 +414,23 @@ const fmConfig = loadConfigFromEnv({
 ## Rate limiting
 
 Each login attempt makes multiple calls to the FileMaker Data API. Add rate limiting to `/api/auth/callback/filemaker` at the middleware or infrastructure level to protect your FM server from brute-force attempts.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `npm error notarget No matching version found for next-auth@^5` | No stable 5.x exists on npm yet | Pin the beta explicitly: `npm install "next-auth@5.0.0-beta.30"` |
+| `TypeError: NextAuth is not a function` or destructuring yields `undefined` | `next-auth` v4 installed instead of v5 | Reinstall with the pinned beta: `npm install "next-auth@5.0.0-beta.30"` |
+| Infinite redirect loop to `/login` | `authorized` callback dropped by `callbacks: { ... }` overwrite in `auth.ts` (Next.js 15 split-config pattern) | Spread `...authConfig.callbacks` before adding `jwt`/`session` callbacks |
+| Infinite redirect loop to `/login` (Next.js 16 `proxy.ts`) | Separate NextAuth instance created in `proxy.ts` — JWT signature mismatch | Use `import { auth } from "@/auth"; export { auth as proxy };` |
+| `The Proxy file must export a function named "proxy"` | `auth` exported as default instead of named `proxy` | Change to `export { auth as proxy }` in `proxy.ts` |
+| `401` on profile lookup after successful login | Wrong layout name (case-sensitive) | Verify `FM_IdP_USER_LAYOUT` matches the exact layout name in FileMaker (default: `IdP_user`) |
+| User authenticates but `projects` array is empty | Wrong portal name (case-sensitive) | Verify `FM_IdP_PORTAL_NAME` matches the exact portal object name on the layout (default: `userProjectRole`) |
+| `401` on login even with correct credentials | Account's privilege set missing `fmrest` extended privilege | In FileMaker, enable the `fmrest` extended privilege on the account's privilege set |
+| `ConfigurationError: Missing required environment variables` | Required `FM_IdP_*` env vars not set | Check that `FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, and `FM_IdP_SERVICE_PASSWORD` are set in `.env.local` |
+| Session data missing fields (`userName` is `undefined`) | Type augmentation not set up, or JWT callback not wired | Ensure `types/next-auth.d.ts` exists and both `createJwtCallback()` + `createSessionCallback()` are in the `callbacks` object |
 
 ---
 

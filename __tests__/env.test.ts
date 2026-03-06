@@ -34,6 +34,11 @@ function clearEnv() {
     "FM_IdP_FIELD_PROJECT_NAME",
     "FM_IdP_FIELD_ROLE_NAME",
     "FM_IdP_EVENT_LOG_LAYOUT",
+    "FM_IdP_EVENTLOG_FIELD_ACTION",
+    "FM_IdP_EVENTLOG_FIELD_DETAIL",
+    "FM_IdP_EVENTLOG_FIELD_ERROR",
+    "FM_IdP_EVENTLOG_FIELD_USER_ID",
+    "FM_IdP_EVENTLOG_FIELD_NOTES",
   ];
   for (const k of ALL_VARS) {
     delete process.env[k];
@@ -59,7 +64,7 @@ describe("loadConfigFromEnv", () => {
     const config = loadConfigFromEnv();
 
     expect(config.useHttps).toBe(true);
-    expect(config.userLayout).toBe("DAPI_USER");
+    expect(config.userLayout).toBe("IdP_user");
     expect(config.timeout).toBe(10000);
     expect(config.fields.idUserField).toBe("id_user");
     expect(config.fields.usernameField).toBe("userName");
@@ -70,6 +75,11 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.projectIdField).toBe("project::id_project");
     expect(config.fields.projectNameField).toBe("project::projectName");
     expect(config.fields.roleNameField).toBe("role::roleName");
+    expect(config.eventLogFields.actionField).toBe("action");
+    expect(config.eventLogFields.detailField).toBe("detail");
+    expect(config.eventLogFields.errorField).toBe("error");
+    expect(config.eventLogFields.foreignKeyIdField).toBe("id_user");
+    expect(config.eventLogFields.notesField).toBe("notes");
     expect(config.eventLogLayout).toBeUndefined();
   });
 
@@ -106,6 +116,23 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.roleNameField).toBe("myRole::name");
   });
 
+  it("respects custom event log field name overrides", () => {
+    setEnv({
+      ...REQUIRED_ENV,
+      FM_IdP_EVENTLOG_FIELD_ACTION: "EventType",
+      FM_IdP_EVENTLOG_FIELD_DETAIL: "Description",
+      FM_IdP_EVENTLOG_FIELD_ERROR: "ErrorMsg",
+      FM_IdP_EVENTLOG_FIELD_USER_ID: "fk_UserID",
+      FM_IdP_EVENTLOG_FIELD_NOTES: "Comments",
+    });
+    const config = loadConfigFromEnv();
+    expect(config.eventLogFields.actionField).toBe("EventType");
+    expect(config.eventLogFields.detailField).toBe("Description");
+    expect(config.eventLogFields.errorField).toBe("ErrorMsg");
+    expect(config.eventLogFields.foreignKeyIdField).toBe("fk_UserID");
+    expect(config.eventLogFields.notesField).toBe("Comments");
+  });
+
   it("throws ConfigurationError when FM_IdP_HOST is missing", () => {
     setEnv({
       FM_IdP_DATABASE: "IdP_Accounts",
@@ -131,9 +158,9 @@ describe("loadConfigFromEnv", () => {
   });
 
   it("sets eventLogLayout when FM_IdP_EVENT_LOG_LAYOUT is provided", () => {
-    setEnv({ ...REQUIRED_ENV, FM_IdP_EVENT_LOG_LAYOUT: "DAPI_EVENTLOG" });
+    setEnv({ ...REQUIRED_ENV, FM_IdP_EVENT_LOG_LAYOUT: "IdP_eventlog" });
     const config = loadConfigFromEnv();
-    expect(config.eventLogLayout).toBe("DAPI_EVENTLOG");
+    expect(config.eventLogLayout).toBe("IdP_eventlog");
   });
 
   it("leaves eventLogLayout undefined when FM_IdP_EVENT_LOG_LAYOUT is empty string", () => {
@@ -154,5 +181,11 @@ describe("loadConfigFromEnv", () => {
     const config = loadConfigFromEnv({ timeout: 3000 });
     // programmatic override wins
     expect(config.timeout).toBe(3000);
+  });
+
+  it("normalizes FM_IdP_HOST to lowercase", () => {
+    setEnv({ ...REQUIRED_ENV, FM_IdP_HOST: "FM.Example.com" });
+    const config = loadConfigFromEnv();
+    expect(config.host).toBe("fm.example.com");
   });
 });

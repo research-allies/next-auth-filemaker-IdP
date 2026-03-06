@@ -5,7 +5,8 @@ import {
   createEventHandlers,
 } from "../src/callbacks.js";
 import type { FileMakerJWT } from "../src/callbacks.js";
-import type { FileMakerIdPConfig, ProjectAssignment } from "../src/types.js";
+import type { ProjectAssignment } from "../src/types.js";
+import { eventConfig } from "./helpers/config.js";
 
 // Mock fmWriteEventLog so event handler tests don't make real FM calls
 vi.mock("../src/filemaker-client.js", () => ({
@@ -130,27 +131,7 @@ describe("createSessionCallback", () => {
 
 // ─── createEventHandlers ───────────────────────────────────────────────────
 
-const eventConfig: FileMakerIdPConfig = {
-  host: "fm.example.com",
-  database: "IdP_Accounts",
-  useHttps: true,
-  serviceUsername: "svc",
-  servicePassword: "svc_pass",
-  userLayout: "DAPI_USER",
-  timeout: 5000,
-  eventLogLayout: "DAPI_EVENTLOG",
-  fields: {
-    idUserField: "id_user",
-    usernameField: "userName",
-    nameFirstField: "nameFirst",
-    nameLastField: "nameLast",
-    emailField: "email",
-    portalName: "userProjectRole",
-    projectIdField: "project::id_project",
-    projectNameField: "project::projectName",
-    roleNameField: "role::roleName",
-  },
-};
+// eventConfig imported from ./helpers/config.js
 
 describe("createEventHandlers", () => {
   beforeEach(() => {
@@ -162,7 +143,7 @@ describe("createEventHandlers", () => {
     signIn({ user: fmUser });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      scriptName: "signIn",
+      action: "signIn",
       foreignKeyId: "u001",
       notes: "User jdoe signed in.",
     });
@@ -173,7 +154,7 @@ describe("createEventHandlers", () => {
     signOut({ token: { id: "u001", userName: "jdoe" } });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      scriptName: "signOut",
+      action: "signOut",
       foreignKeyId: "u001",
       notes: "User jdoe signed out.",
     });
@@ -184,7 +165,7 @@ describe("createEventHandlers", () => {
     signOut({ token: undefined });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      scriptName: "signOut",
+      action: "signOut",
       foreignKeyId: undefined,
       notes: undefined,
     });
@@ -195,7 +176,7 @@ describe("createEventHandlers", () => {
     signOut({ session: null });
 
     expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      scriptName: "signOut",
+      action: "signOut",
       foreignKeyId: undefined,
       notes: undefined,
     });

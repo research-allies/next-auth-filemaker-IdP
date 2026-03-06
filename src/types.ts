@@ -54,19 +54,36 @@ export interface FieldMapping {
 }
 
 /**
+ * Maps env var overrides to FileMaker event log field names.
+ * All fields have defaults matching the standard IdP_Accounts.fmp12 schema.
+ */
+export interface EventLogFieldMapping {
+  /** Field for event type (e.g. `"signIn"`). Default: `"action"` */
+  actionField: string;
+  /** Field for human-readable detail. Default: `"detail"` */
+  detailField: string;
+  /** Field for error messages. Default: `"error"` */
+  errorField: string;
+  /** Field for foreign key (user PK). Default: `"id_user"` */
+  foreignKeyIdField: string;
+  /** Field for additional notes. Default: `"notes"` */
+  notesField: string;
+}
+
+/**
  * Payload written to the FileMaker event log layout on auth events.
  * Fields map to FM field names via `fmWriteEventLog`.
  */
 export interface EventLogEntry {
-  /** Event type written to `Script_Name`. One of `"signIn"`, `"signOut"`, `"signInFailed"`. */
-  scriptName: string;
-  /** Human-readable description written to `Detail` (e.g. username or email). */
+  /** Event type mapped to `eventLogFields.actionField`. One of `"signIn"`, `"signOut"`, `"signInFailed"`. */
+  action: string;
+  /** Human-readable description mapped to `eventLogFields.detailField` (e.g. username or email). */
   detail?: string;
-  /** Error message written to `Error` (failure events only). */
+  /** Error message mapped to `eventLogFields.errorField` (failure events only). */
   error?: string;
-  /** User PK written to `fk_ForeignKeyID`. */
+  /** User PK mapped to `eventLogFields.foreignKeyIdField`. */
   foreignKeyId?: string;
-  /** Additional context written to `Notes`. */
+  /** Additional context mapped to `eventLogFields.notesField`. */
   notes?: string;
 }
 
@@ -85,10 +102,12 @@ export interface FileMakerIdPConfig {
   serviceUsername: string;
   /** Service account password for backend profile/privilege queries */
   servicePassword: string;
-  /** Data API layout name for user profile + portal. Default: `"DAPI_USER"` */
+  /** Data API layout name for user profile + portal. Default: `"IdP_user"` */
   userLayout: string;
   /** Field name mappings (with defaults matching IdP_Accounts.fmp12 schema) */
   fields: FieldMapping;
+  /** Event log field name mappings (with defaults matching IdP_Accounts.fmp12 schema) */
+  eventLogFields: EventLogFieldMapping;
   /** Request timeout in milliseconds. Default: `10000` */
   timeout: number;
   /**
