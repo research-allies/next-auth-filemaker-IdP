@@ -35,38 +35,28 @@ npm install "next-auth@5.0.0-beta.30" @research-allies/next-auth-filemaker-idp
 
 ## 3. Set environment variables
 
-First, generate `AUTH_SECRET` — the app will not start without it:
+Bootstrap your `.env.local` from the package's `.env.example`, which is the canonical list of all supported variables with their defaults:
+
+```bash
+cp node_modules/@research-allies/next-auth-filemaker-idp/.env.example .env.local
+```
+
+Fill in the required values:
+
+```shell
+FM_IdP_HOST=your-filemaker-server.com
+FM_IdP_DATABASE=YourDatabase.fmp12
+FM_IdP_SERVICE_USERNAME=your-service-account
+FM_IdP_SERVICE_PASSWORD=your-service-password
+AUTH_SECRET=<paste generated secret here>
+```
+
+The optional variables (field name overrides, portal name, event log layout, etc.) are documented with their defaults in `.env.example` — uncomment and change only the ones that differ from your schema.
+
+Generate `AUTH_SECRET` — the app will not start without it:
 
 ```bash
 openssl rand -base64 32
-```
-
-Then create `.env.local` in the app root with the generated value and your FileMaker credentials:
-
-```shell
-# ── Required ────────────────────────────────────────────────
-FM_IdP_HOST=your-filemaker-server.com
-FM_IdP_DATABASE=YourDatabase.fmp12
-FM_IdP_SERVICE_USERNAME=
-FM_IdP_SERVICE_PASSWORD=
-AUTH_SECRET=<paste generated secret here>
-
-# ── Optional (defaults shown) ────────────────────────────────
-FM_IdP_USE_HTTPS=true
-FM_IdP_USER_LAYOUT=IdP_user
-FM_IdP_TIMEOUT=10000                                # request timeout in milliseconds
-# FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog             # omit or leave blank to disable event logging
-
-# Field names — only set if your schema differs from defaults
-FM_IdP_FIELD_ID_USER=id_user
-FM_IdP_FIELD_USERNAME=userName
-FM_IdP_FIELD_NAME_FIRST=nameFirst
-FM_IdP_FIELD_NAME_LAST=nameLast
-FM_IdP_FIELD_EMAIL=email
-FM_IdP_PORTAL_NAME=userProjectRole
-FM_IdP_FIELD_PROJECT_ID=project::id_project
-FM_IdP_FIELD_PROJECT_NAME=project::projectName
-FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
 ## 4. Create `auth.ts`

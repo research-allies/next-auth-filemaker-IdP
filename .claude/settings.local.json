@@ -12,7 +12,8 @@
       "Bash(npm test)",
       "Bash(npx vitest run __tests__/env.test.ts)",
       "Bash(npx vitest run __tests__/provider.test.ts)",
-      "Bash(npx vitest run)"
+      "Bash(npx vitest run)",
+      "Bash(npm run dev)"
     ]
   }
 }
