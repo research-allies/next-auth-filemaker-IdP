@@ -395,6 +395,11 @@ export default async function AdminPage({ params }: { params: Promise<{ projectI
 | `FM_IdP_FIELD_PROJECT_ID` | | `project::id_project` | Portal field — project PK |
 | `FM_IdP_FIELD_PROJECT_NAME` | | `project::projectName` | Portal field — project name |
 | `FM_IdP_FIELD_ROLE_NAME` | | `role::roleName` | Portal field — role name |
+| `FM_IdP_EVENTLOG_FIELD_ACTION` | | `action` | Event log action field |
+| `FM_IdP_EVENTLOG_FIELD_DETAIL` | | `detail` | Event log detail field |
+| `FM_IdP_EVENTLOG_FIELD_ERROR` | | `error` | Event log error field |
+| `FM_IdP_EVENTLOG_FIELD_USER_ID` | | `id_user` | Event log user ID field |
+| `FM_IdP_EVENTLOG_FIELD_NOTES` | | `notes` | Event log notes field |
 
 ---
 
