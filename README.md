@@ -64,7 +64,7 @@ Copy `.env.example` (shipped with the package) into your app's `.env.local`:
 # Required
 FM_IdP_HOST=your-filemaker-server.com
 FM_IdP_DATABASE=IdP_Accounts
-FM_IdP_SERVICE_USERNAME=acct_dapi
+FM_IdP_SERVICE_USERNAME=<service-account-username>
 FM_IdP_SERVICE_PASSWORD=<service-account-password>
 AUTH_SECRET=<random-secret>           # generate: openssl rand -base64 32
 
@@ -75,15 +75,22 @@ FM_IdP_TIMEOUT=10000
 # FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog   # omit or leave blank to disable event logging
 
 # Field names — only set if your schema differs from the defaults
-FM_IdP_FIELD_ID_USER=id_user
-FM_IdP_FIELD_USERNAME=userName
-FM_IdP_FIELD_NAME_FIRST=nameFirst
-FM_IdP_FIELD_NAME_LAST=nameLast
-FM_IdP_FIELD_EMAIL=email
-FM_IdP_PORTAL_NAME=userProjectRole
-FM_IdP_FIELD_PROJECT_ID=project::id_project
-FM_IdP_FIELD_PROJECT_NAME=project::projectName
-FM_IdP_FIELD_ROLE_NAME=role::roleName
+# FM_IdP_FIELD_ID_USER=id_user
+# FM_IdP_FIELD_USERNAME=userName
+# FM_IdP_FIELD_NAME_FIRST=nameFirst
+# FM_IdP_FIELD_NAME_LAST=nameLast
+# FM_IdP_FIELD_EMAIL=email
+# FM_IdP_PORTAL_NAME=userProjectRole
+# FM_IdP_FIELD_PROJECT_ID=project::id_project
+# FM_IdP_FIELD_PROJECT_NAME=project::projectName
+# FM_IdP_FIELD_ROLE_NAME=role::roleName
+
+# Event log table fields — only set if your schema differs from the defaults
+# FM_IdP_EVENTLOG_FIELD_ACTION=action
+# FM_IdP_EVENTLOG_FIELD_DETAIL=detail
+# FM_IdP_EVENTLOG_FIELD_ERROR=error
+# FM_IdP_EVENTLOG_FIELD_USER_ID=id_user
+# FM_IdP_EVENTLOG_FIELD_NOTES=notes
 ```
 
 ### 2. `auth.ts`
