@@ -53,6 +53,8 @@ AUTH_SECRET=<paste generated secret here>
 
 The optional variables (field name overrides, portal name, event log layout, etc.) are documented with their defaults in `.env.example` — uncomment and change only the ones that differ from your schema.
 
+> **Important:** Whether you use `cp` or create `.env.local` manually, the file must contain all variables from `.env.example` — required ones filled in, optional ones present and commented out. Do not create a minimal `.env.local` with only the required vars. The commented-out optional vars serve as inline documentation of what can be configured without having to consult external docs.
+
 Generate `AUTH_SECRET` — the app will not start without it:
 
 ```bash
@@ -410,6 +412,8 @@ export function SignOutButton() {
 ```
 
 Then add it to your existing `app/page.tsx` — import `auth` and `SignOutButton`, make the function `async`, and drop `<SignOutButton />` wherever it fits in the existing layout:
+
+> **Warning:** Do NOT replace the contents of `app/page.tsx`. Only add the three lines shown (two imports + `async`) and insert `<SignOutButton />` into the existing JSX. The comment `{/* ...your existing page content... */}` represents your existing JSX — leave it in place.
 
 ```typescript
 // app/page.tsx  (additions shown; keep your existing JSX)
