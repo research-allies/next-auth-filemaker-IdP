@@ -339,6 +339,12 @@ The release includes:
 - The compiled npm package (dual CJS/ESM)
 - `IdP_Accounts.fmp12` attached as a release asset (not included in the npm package — consumers download from the GitHub release)
 
+Consuming apps install the package with:
+
+```
+npm install @research-allies/next-auth-filemaker-idp
+```
+
 ---
 
 ## Summary
