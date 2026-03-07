@@ -383,6 +383,8 @@ GitHub Actions workflow publishes to GitHub Packages on release. README covers i
 
 **Files:** `.github/workflows/publish.yml`, `README.md`
 
+> **Release checklist:** When creating the GitHub release, attach `FM files/IdP_Accounts.fmp12` as a release asset. This is the only distribution channel for the example database — it is intentionally excluded from the npm package (`"files"` in `package.json` only includes `dist` and `.env.example`). Consumers who need the example FileMaker backend should download it from the release assets and host it on their own FileMaker Server.
+
 ---
 
 ## Consuming App Integration Example
@@ -433,4 +435,4 @@ Apps add a `types/next-auth.d.ts` to augment Auth.js types with `projects: Proje
    - Login with valid credentials → session contains `projects` with roles
    - Login with invalid credentials → redirected to error/login page
    - Session object contains only identity + projects (no FM tokens)
-5. **Publish:** Create a GitHub release → workflow publishes to GitHub Packages
+5. **Publish:** Create a GitHub release → workflow publishes to GitHub Packages → attach `FM files/IdP_Accounts.fmp12` as a release asset
