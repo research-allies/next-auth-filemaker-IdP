@@ -35,6 +35,8 @@ npm install "next-auth@5.0.0-beta.30" @research-allies/next-auth-filemaker-idp
 
 ## 3. Set environment variables
 
+> **FileMaker database:** If you need the example `IdP_Accounts.fmp12` backend, download it from the package's GitHub release assets and host it on your FileMaker Server. The database is not included in the npm package.
+
 Bootstrap your `.env.local` from the package's `.env.example`, which is the canonical list of all supported variables with their defaults:
 
 ```bash
@@ -434,6 +436,14 @@ export default async function Home() {
   );
 }
 ```
+
+> **Layout gap warning:** If your page's main container uses `justify-content: space-between` (common in Next.js starters), placing the greeting and button as separate sibling elements will spread them apart across the full viewport height. Wrap them together in a single element so they are treated as one flex item:
+> ```typescript
+> <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+>   <p>Hello {session?.user.nameFirst}</p>
+>   <SignOutButton />
+> </div>
+> ```
 
 > **Why two files?** `signOut` from `next-auth/react` is a client-side function. The page itself is a Server Component so it can call `auth()` directly. Keeping the button in a separate `"use client"` file maintains the server/client boundary.
 
