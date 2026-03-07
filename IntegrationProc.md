@@ -411,9 +411,11 @@ export function SignOutButton() {
 }
 ```
 
-Then add it to your existing `app/page.tsx` — import `auth` and `SignOutButton`, make the function `async`, and drop `<SignOutButton />` wherever it fits in the existing layout:
+Then add it to your existing `app/page.tsx` — import `auth` and `SignOutButton`, make the function `async`, and insert the greeting and button at the top of the page (or in your app's title bar / navigation header if one exists):
 
-> **Warning:** Do NOT replace the contents of `app/page.tsx`. Only add the three lines shown (two imports + `async`) and insert `<SignOutButton />` into the existing JSX. The comment `{/* ...your existing page content... */}` represents your existing JSX — leave it in place.
+> **Warning:** Do NOT replace the contents of `app/page.tsx`. Only add the three lines shown (two imports + `async`) and insert the greeting and `<SignOutButton />` into the existing JSX. The comment `{/* ...your existing page content... */}` represents your existing JSX — leave it in place.
+
+> **Placement:** Put the greeting and sign-out button *above* the rest of the page content. If your app has a title bar or nav header, place them on the right side of it. If there is no header yet, place them as the first element inside your page's main container.
 
 ```typescript
 // app/page.tsx  (additions shown; keep your existing JSX)
@@ -425,8 +427,9 @@ export default async function Home() {
 
   return (
     <main>
-      {/* ...your existing page content... */}
+      <p>Hello {session?.user.nameFirst}</p>
       <SignOutButton />
+      {/* ...your existing page content... */}
     </main>
   );
 }
