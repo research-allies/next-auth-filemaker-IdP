@@ -534,3 +534,61 @@ Alternatively, set `NODE_TLS_REJECT_UNAUTHORIZED=0` in `.env.local` (applies glo
 | `ConfigurationError: Missing required environment variables` | Required `FM_IdP_*` env vars not set | Check that `FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, and `FM_IdP_SERVICE_PASSWORD` are all set in `.env.local` |
 | `FileMakerAuthError: Invalid FileMaker credentials` | Service account credentials are wrong, or user credentials are wrong | For service account errors (during profile lookup), check `FM_IdP_SERVICE_USERNAME`/`FM_IdP_SERVICE_PASSWORD`. For user errors, the login form will show an error message. |
 | Session data missing fields (e.g., `userName` is `undefined`) | Type augmentation not set up, or JWT callback not wired | Ensure `types/next-auth.d.ts` exists (step 6) and `createJwtCallback()` + `createSessionCallback()` are both in the `callbacks` object |
+
+## Security considerations
+
+### Secrets management
+
+- **`.env.local` must be in `.gitignore`.** Next.js excludes it by default, but verify this in your project — committing it exposes `AUTH_SECRET` and your FileMaker service account credentials.
+- **Never prefix `FM_IdP_*` variables with `NEXT_PUBLIC_`.** Next.js inlines any `NEXT_PUBLIC_*` variable into the browser bundle. Prefixing a FileMaker variable this way would expose your server hostname, database name, or — worst case — service account credentials to every visitor.
+- **`AUTH_SECRET` must be strong.** Use at least 32 bytes of cryptographic randomness (the `openssl rand -base64 32` command in step 3 produces this). Short or predictable values allow JWT forgery and session hijacking.
+- **Rotate secrets periodically.** Change `FM_IdP_SERVICE_PASSWORD` and `AUTH_SECRET` on a regular schedule. When you rotate `AUTH_SECRET`, all existing sessions are invalidated (users must sign in again).
+
+### No FileMaker tokens in the JWT
+
+The package discards the user's FM Data API session token immediately after credential validation and closes the service account session after the profile lookup. **No FM tokens are ever written to the JWT or session.** The JWT contains identity and project/role assignments only. This means a compromised JWT cannot be used to make Data API calls against your FileMaker Server.
+
+### HTTPS enforcement
+
+All Data API calls use HTTPS by default. Setting `FM_IdP_USE_HTTPS=false` is blocked in production — the package throws a `FileMakerIdPError` at startup because user and service account credentials are sent via HTTP Basic Auth, which is safe only over TLS.
+
+### CSRF protection
+
+Auth.js v5 automatically generates and validates CSRF tokens on all POST endpoints under `/api/auth/*`. No additional CSRF configuration is needed in the consuming app.
+
+### Security headers
+
+The package does not set HTTP response headers — that is the consuming app's responsibility. Configure these in `next.config.js` (or `next.config.ts`):
+
+```javascript
+// next.config.js
+const securityHeaders = [
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+];
+
+module.exports = {
+  async headers() {
+    return [{ source: "/(.*)", headers: securityHeaders }];
+  },
+};
+```
+
+> **Note:** If your app needs a Content Security Policy (CSP), add it to the list above. The built-in `FileMakerLoginForm` uses no inline styles or scripts, so it is compatible with strict CSPs.
+
+### Cookie security
+
+Auth.js sets session cookies with `httpOnly`, `secure`, and `sameSite: lax` flags when served over HTTPS. In production, **always serve your app over HTTPS** — without it the `Secure` flag is not set, and session cookies can be intercepted on the network.
+
+### Error message safety
+
+The package never exposes FileMaker server URLs, layout names, or credentials to the client. When authentication fails, the `authorize()` function returns `null`, which Auth.js converts to a generic `CredentialsSignin` error on the login page. Detailed error information (FM response codes, network errors, stack traces) is logged server-side only via `console.error` and is never sent to the browser.
+
+### Input sanitization
+
+User-supplied values are sanitized before use in FileMaker queries and log messages:
+
+- **Find queries** — `sanitizeFmFindValue()` strips single-character FM Find operator characters (`= ! < > ≤ ≥ ~ * @ # ? / \ "`) before the value is used in a `_find` request. Multi-character operators are neutralized by the `==` exact-match prefix applied to all queries.
+- **Log interpolation** — `safeLogValue()` truncates values and strips control characters (`\x00–\x1f`) before they are interpolated into event log entries, preventing log injection.
