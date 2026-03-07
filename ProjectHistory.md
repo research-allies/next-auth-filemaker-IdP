@@ -326,6 +326,21 @@ Added a comprehensive Security Considerations section to `IntegrationProc.md`:
 
 ---
 
+## Phase 18: v0.1.0 Release
+
+*Mar 7, 2026*
+
+Published the initial public release of `@research-allies/next-auth-filemaker-idp` to GitHub Packages as **v0.1.0**.
+
+Initial release of the FileMaker Server authentication provider for Auth.js v5. Authenticates users against FileMaker's Data API, queries profile and project/role assignments via a service account, and forwards identity and privileges into the JWT session. Includes a reusable `FileMakerLoginForm` React component, event logging to FileMaker, and full TypeScript types for session augmentation.
+
+The release includes:
+
+- The compiled npm package (dual CJS/ESM)
+- `IdP_Accounts.fmp12` attached as a release asset (not included in the npm package — consumers download from the GitHub release)
+
+---
+
 ## Summary
 
 | | Date Range | Focus |
@@ -356,3 +371,4 @@ Added a comprehensive Security Considerations section to `IntegrationProc.md`:
 | Phase 16 | Mar 7 | IntegrationProc polish — warnings, release checklist |
 | IT 9 | Mar 7 | IntegrationProc accuracy scan |
 | Phase 17 | Mar 7 | Security documentation |
+| Phase 18 | Mar 7 | v0.1.0 public release |
