@@ -346,7 +346,7 @@ The component accepts optional props:
 
 > **Why `/client`?** The `FileMakerLoginForm` uses React hooks (`useState`). It is published under the `./client` subpath export so bundlers can correctly resolve the `"use client"` boundary. Importing from the main package path will cause a Server Component error.
 
-> **Styling:** `FileMakerLoginForm` renders unstyled `<input>` and `<button>` elements — it ships with no CSS classes or inline styles. The `className` prop applies to the outer `<form>` tag only. How far you can go with Option A depends on your styling approach:
+> **Styling:** `FileMakerLoginForm` renders a `<form>` containing `<label>`/`<input>` pairs for username and password, a `<p role="alert">` for error messages, and a `<button>`. It ships with no CSS classes or inline styles, and disables the inputs and button while a sign-in request is in flight (button text changes to `"Signing in…"`). The `className` prop applies to the outer `<form>` tag only. How far you can go with Option A depends on your styling approach:
 > - **Plain CSS / CSS Modules** — works well. Standard descendant selectors (`form input`, `form button`) reach the component's internals from your login page's stylesheet.
 > - **Tailwind** — Tailwind's preflight normalizes the inputs and button to a consistent baseline. For further styling, use `className` on the form and descendant selectors in a CSS module alongside Tailwind, or switch to Option B where you can apply utility classes to every element directly.
 > - **Component libraries (MUI, Chakra, etc.)** — global resets (`CssBaseline`, etc.) apply, but the component's inputs and button won't inherit library component styles because they're plain HTML elements, not `TextField` or `Button`. The form will look out of place next to the rest of the app. Use Option B and build the form with your library's components instead.
@@ -468,7 +468,7 @@ Implement rate limiting on the login route at the application level. Some option
 
 - **Middleware/proxy** — track login attempts by IP and block after a threshold.
 
-> **Performance tip:** Each `fmWriteEventLog` call (triggered by `createEventHandlers`) opens its own service session (login → write → logout). If your app logs a high volume of auth events, you can reduce this overhead by caching the service account token in your `auth.ts` with a short TTL (e.g. 60 seconds) and passing it via the `fetch` override or a wrapper around `fmWriteEventLog`. The package intentionally does not do this internally — a stateful token cache belongs in the consuming app where session lifetime, concurrency, and invalidation strategy can be tailored to the deployment.
+> **Performance tip:** Each `fmWriteEventLog` call (triggered by `createEventHandlers`) opens its own service session (login → write → logout). If your app logs a high volume of auth events, you can reduce this overhead by caching the service account token in your app with a short TTL (e.g. 60 seconds) and calling `fmWriteEventLog(config, entry, cachedToken)` directly — bypassing `createEventHandlers` — so the cached token is reused instead of opening a new session per event. The package intentionally does not do this internally — a stateful token cache belongs in the consuming app where session lifetime, concurrency, and invalidation strategy can be tailored to the deployment.
 
 ## 12. Client IP logging
 

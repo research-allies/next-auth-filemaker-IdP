@@ -79,6 +79,7 @@ Define the data shapes and configuration options that every other module depends
 - `servicePassword` ← `FM_IdP_SERVICE_PASSWORD` — Backend service account password
 - `userLayout` ← `FM_IdP_USER_LAYOUT` (default `"IdP_user"`) — Data API layout name for user profile + portal
 - `fields` — FieldMapping (see below)
+- `eventLogFields` — EventLogFieldMapping (see below)
 - `timeout` ← `FM_IdP_TIMEOUT` (default `10000`) — request timeout in milliseconds for all fetch calls
 - `fetch?: typeof globalThis.fetch` — programmatic override only (not from env), for self-signed cert handling
 - `eventLogLayout?: string` ← `FM_IdP_EVENT_LOG_LAYOUT` — event log layout name; `undefined` disables logging
@@ -94,12 +95,19 @@ Define the data shapes and configuration options that every other module depends
 - `projectNameField` ← `FM_IdP_FIELD_PROJECT_NAME` (default `"project::projectName"`) — portal field, `TableName::fieldName` format
 - `roleNameField` ← `FM_IdP_FIELD_ROLE_NAME` (default `"role::roleName"`) — portal field, `TableName::fieldName` format
 
+**`EventLogFieldMapping`** (from env vars, with defaults matching IdP_Accounts.fmp12 schema):
+- `actionField` ← `FM_IdP_EVENTLOG_FIELD_ACTION` (default `"action"`) — event type field
+- `detailField` ← `FM_IdP_EVENTLOG_FIELD_DETAIL` (default `"detail"`) — human-readable description field
+- `errorField` ← `FM_IdP_EVENTLOG_FIELD_ERROR` (default `"error"`) — error message field
+- `idUserField` ← `FM_IdP_EVENTLOG_FIELD_USER_ID` (default `"id_user"`) — user FK field
+- `notesField` ← `FM_IdP_EVENTLOG_FIELD_NOTES` (default `"notes"`) — additional context field
+
 **`.env.example`** (shipped with the package as a reference):
 ```
 # FileMaker Server connection
 FM_IdP_HOST=fm.example.com
 FM_IdP_DATABASE=IdP_Accounts
-FM_IdP_USE_HTTPS=true
+# FM_IdP_USE_HTTPS=true
 
 # Service account for backend profile/privilege queries (not the end user's credentials)
 FM_IdP_SERVICE_USERNAME=
@@ -109,26 +117,33 @@ FM_IdP_SERVICE_PASSWORD=
 AUTH_SECRET=
 
 # Data API layout for user profile lookup (includes userProjectRole portal)
-FM_IdP_USER_LAYOUT=IdP_user
+# FM_IdP_USER_LAYOUT=IdP_user
 
 # Request timeout in milliseconds (default: 10000)
-FM_IdP_TIMEOUT=10000
+# FM_IdP_TIMEOUT=10000
 
 # User table fields (defaults shown — only override if your schema differs)
-FM_IdP_FIELD_ID_USER=id_user
-FM_IdP_FIELD_USERNAME=userName
-FM_IdP_FIELD_NAME_FIRST=nameFirst
-FM_IdP_FIELD_NAME_LAST=nameLast
-FM_IdP_FIELD_EMAIL=email
+# FM_IdP_FIELD_ID_USER=id_user
+# FM_IdP_FIELD_USERNAME=userName
+# FM_IdP_FIELD_NAME_FIRST=nameFirst
+# FM_IdP_FIELD_NAME_LAST=nameLast
+# FM_IdP_FIELD_EMAIL=email
 
 # UserProjectRole portal fields (portal rows use TableName::fieldName format)
-FM_IdP_PORTAL_NAME=userProjectRole
-FM_IdP_FIELD_PROJECT_ID=project::id_project
-FM_IdP_FIELD_PROJECT_NAME=project::projectName
-FM_IdP_FIELD_ROLE_NAME=role::roleName
+# FM_IdP_PORTAL_NAME=userProjectRole
+# FM_IdP_FIELD_PROJECT_ID=project::id_project
+# FM_IdP_FIELD_PROJECT_NAME=project::projectName
+# FM_IdP_FIELD_ROLE_NAME=role::roleName
 
 # Event logging — set to your event log layout name to enable; omit or leave blank to disable
 # FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog
+
+# Event log table fields (defaults shown — only override if your schema differs)
+# FM_IdP_EVENTLOG_FIELD_ACTION=action
+# FM_IdP_EVENTLOG_FIELD_DETAIL=detail
+# FM_IdP_EVENTLOG_FIELD_ERROR=error
+# FM_IdP_EVENTLOG_FIELD_USER_ID=id_user
+# FM_IdP_EVENTLOG_FIELD_NOTES=notes
 ```
 
 **`UserProfile`** (identity-only; returned as the `profile` field from `fmFindUserWithPrivileges`):
@@ -175,7 +190,7 @@ Create shared helper functions used by the FM Data API client — things like en
 - `encodeBasicAuth(username, password)` — Base64 encode credentials
 - `buildDataApiBaseUrl(config)` — `https://{host}/fmi/data/vLatest/databases/{db}` — database name is wrapped in `encodeURIComponent()` to handle names containing spaces or special characters safely
 - `getFetch(config)` — Return custom or global fetch
-- `sanitizeFmFindValue(value)` — Strips FM Find operator characters (`=!<>≤≥~*@#/\`) to prevent query injection in Find requests
+- `sanitizeFmFindValue(value)` — Strips FM Find operator characters (`=!<>≤≥~*@#?/\"`) to prevent query injection in Find requests
 
 ### Step 5: FileMaker Data API client
 Build the module that talks directly to FileMaker Server. This handles credential validation (session endpoint), user profile + privilege lookup (Find with portal), and session management.
@@ -216,12 +231,12 @@ Wire the FM Data API calls together into an Auth.js provider — the single piec
   - **Client IP extraction** — on each `authorize` call, the `request` object is inspected for `x-forwarded-for` (first IP only) and `x-real-ip` headers to capture the reported client IP for the audit trail; `undefined` if neither header is present
   - `authorize` callback:
     1. Validate credentials exist (return `null` immediately if missing)
-    2. Extract reported client IP from request headers (`x-forwarded-for` → first segment, fallback `x-real-ip`)
-    3. Call `fmLogin` for both user and service account in parallel via `Promise.allSettled` — if user login fails (`FileMakerAuthError` or any other error), clean up any service token and call `fmWriteEventLog` (fire-and-forget) with `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`, then return `null`
+    2. Extract reported client IP from request headers (`x-forwarded-for` → first segment, fallback `x-real-ip`); defaults to `"unknown"` if neither header is present
+    3. Call `fmLogin` for both user and service account in parallel via `Promise.allSettled` — if user login fails (`FileMakerAuthError` or any other error), clean up any service token and call `fmWriteEventLog` (fire-and-forget), passing the service token as `existingToken` if available (reuse to avoid an extra login), with `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: buildLoginError(reason) }` — `buildLoginError` maps `FileMakerAuthError` → `"Invalid credentials"`, other FM errors → `"{message} (FileMaker error)"`, unknown errors → `"{message}"`; then return `null`
     4. On successful user login, immediately call `fmLogout(config, userToken)` (fire-and-forget) — the token is discarded; the user's FM credentials are validated but their session is never retained
     5. If service login failed, call `fmWriteEventLog` with `{ action: "signInFailed", notes: "...", error: "Service account error" }` then return `null`
     6. Call `fmFindUserWithPrivileges(config, serviceToken, username)` — Data API Find on User layout using the service token; if fails, call `fmWriteEventLog` with `{ action: "signInFailed", notes: "...", error: "Profile lookup failed" }` then return `null`
-    7. Call `fmLogout(config, serviceToken)` — close the service session in a `finally` block (fire-and-forget, runs on both success and failure of step 6)
+    7. On success: call `fmLogout(config, serviceToken)` fire-and-forget directly before returning; on failure: `fmWriteEventLog` (passing `serviceToken` as `existingToken`) closes the service session via `.finally(() => fmLogout(config, serviceToken))`
     8. Return `FileMakerUser` object (identity + projects/roles only; no FM token stored)
 
 > **Security note:** The user's credentials are validated first (step 3). The profile/privilege lookup (steps 5–6) uses a separate backend service account that has read access to the User layout and UserProjectRole portal. All steps must succeed for login to proceed. The service credentials never leave the server.
@@ -279,12 +294,20 @@ Write Auth.js sign-in, sign-out, and failed sign-in events to the `IdP_eventlog`
 - Fire-and-forget — event writes never block or throw; failures are logged as warnings only
 - Successful sign-in and sign-out are handled via Auth.js `events` hooks
 - **Failed sign-in is handled inside the provider's `authorize` callback** (Auth.js fires no event for failures) — `createFileMakerProvider` already receives `config` so no signature change is needed
-- Each event opens its own service session (login → create record → logout), since provider sessions are already closed by the time Auth.js events fire
+- By default each event opens its own service session (login → create record → logout); an optional `existingToken` parameter allows callers to reuse an open session (caller is then responsible for closing it)
 - Opt-in — set `FM_IdP_EVENT_LOG_LAYOUT` to enable; if omitted or empty, event logging is disabled
 
-**New env var (add to `.env.example`, commented out by default):**
+**New env vars (add to `.env.example`, commented out by default):**
 ```
+# Event logging — set to your event log layout name to enable; omit or leave blank to disable
 # FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog
+
+# Event log table fields (defaults shown — only override if your schema differs)
+# FM_IdP_EVENTLOG_FIELD_ACTION=action
+# FM_IdP_EVENTLOG_FIELD_DETAIL=detail
+# FM_IdP_EVENTLOG_FIELD_ERROR=error
+# FM_IdP_EVENTLOG_FIELD_USER_ID=id_user
+# FM_IdP_EVENTLOG_FIELD_NOTES=notes
 ```
 
 **`FileMakerIdPConfig` changes** (`src/types.ts`):
@@ -292,6 +315,7 @@ Write Auth.js sign-in, sign-out, and failed sign-in events to the `IdP_eventlog`
 
 **`loadConfigFromEnv` changes** (`src/env.ts`):
 - Read `FM_IdP_EVENT_LOG_LAYOUT`; if set, assign to `eventLogLayout`; if absent, leave `undefined`
+- Read `FM_IdP_EVENTLOG_FIELD_*` vars into `eventLogFields: EventLogFieldMapping`; each defaults to the IdP_Accounts.fmp12 field name if unset
 
 **New type: `EventLogEntry`** (`src/types.ts`):
 ```typescript
@@ -306,7 +330,7 @@ interface EventLogEntry {
 
 **New function: `fmWriteEventLog`** (`src/filemaker-client.ts`):
 ```typescript
-fmWriteEventLog(config, entry: EventLogEntry): Promise<void>
+fmWriteEventLog(config, entry: EventLogEntry, existingToken?: string): Promise<void>
 ```
 - If `config.eventLogLayout` is undefined, returns immediately (no-op)
 - Opens service session (`fmLogin`), POSTs a new record to the event log layout, closes session (`fmLogout`)
@@ -331,7 +355,7 @@ createEventHandlers(config: FileMakerIdPConfig): { signIn, signOut }
 
 **Provider changes** (`src/provider.ts`):
 - `authorize` runs user and service logins in parallel via `Promise.allSettled`; on failure, `void fmWriteEventLog(config, { ... })` is called (fire-and-forget) before returning `null`; username is passed through `safeLogValue()` and clientIp is extracted from request headers:
-  - User credential failure (both `FileMakerAuthError` and generic errors) → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Invalid credentials" }`
+  - User credential failure → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: buildLoginError(reason) }` — `FileMakerAuthError` → `"Invalid credentials"`, other FM errors → `"{message} (FileMaker error)"`, unknown → `"{message}"`; service token reused as `existingToken` if service login succeeded
   - Service account failure → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Service account error" }`
   - Profile lookup failure → `{ action: "signInFailed", notes: "User {safeUsername} sign in failed from reported IP {clientIp}.", error: "Profile lookup failed" }`
 
