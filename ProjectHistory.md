@@ -372,3 +372,21 @@ The release includes:
 | IT 9 | Mar 7 | IntegrationProc accuracy scan |
 | Phase 17 | Mar 7 | Security documentation |
 | Phase 18 | Mar 7 | v0.1.0 public release |
+
+---
+
+## Final Source Line Count
+
+| File | Lines |
+|------|------:|
+| `src/filemaker-client.ts` | 323 |
+| `src/types.ts` | 130 |
+| `src/provider.ts` | 122 |
+| `src/callbacks.ts` | 105 |
+| `src/env.ts` | 101 |
+| `src/components/FileMakerLoginForm.tsx` | 106 |
+| `src/utils.ts` | 41 |
+| `src/index.ts` | 40 |
+| `src/errors.ts` | 52 |
+| `src/client.ts` | 5 |
+| **Total** | **1,025** |
