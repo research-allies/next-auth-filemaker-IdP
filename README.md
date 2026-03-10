@@ -46,7 +46,7 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 |---|---|
 | `IdP_Accounts.fmp12` | Manages identities, projects, and role assignments |
 
-Default credentials for both files:
+Default credentials:
 
 | Account | Password | Note |
 |---|---|---|
