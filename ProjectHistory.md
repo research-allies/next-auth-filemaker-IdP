@@ -342,7 +342,7 @@ The release includes:
 Consuming apps install the package with:
 
 ```
-npm install @research-allies/next-auth-filemaker-idp
+npm install "next-auth@5.0.0-beta.30" @research-allies/next-auth-filemaker-idp
 ```
 
 ---

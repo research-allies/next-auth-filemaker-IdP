@@ -56,7 +56,7 @@ Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-all
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-> The `${GITHUB_TOKEN}` placeholder is used in CI environments where the token is injected as an environment variable. For local development, the token in your global `~/.npmrc` (step 1) is sufficient — you do not need to set `GITHUB_TOKEN` locally.
+> **This file is safe to commit** — it contains only a variable reference, not an actual token. The `${GITHUB_TOKEN}` placeholder is used in CI environments where the token is injected as an environment variable. For local development, the token in your global `~/.npmrc` (step 1) is sufficient — you do not need to set `GITHUB_TOKEN` locally.
 
 ### 3. Install the package
 
