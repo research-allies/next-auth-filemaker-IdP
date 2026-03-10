@@ -45,7 +45,6 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 | Filename | Description |
 |---|---|
 | `IdP_Accounts.fmp12` | Manages identities, projects, and role assignments |
-| `IdP_File1.fmp12` | Sample solution file that receives distributed FileMaker accounts |
 
 Default credentials for both files:
 
