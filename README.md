@@ -87,10 +87,14 @@ Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-all
 
 ```
 @research-allies:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-> **This file is safe to commit** — it contains only a variable reference, not an actual token. The `${GITHUB_TOKEN}` placeholder is used in CI environments where the token is injected as an environment variable. For local development, the token in your global `~/.npmrc` (step 1) is sufficient — you do not need to set `GITHUB_TOKEN` locally.
+> **This file is safe to commit** — it contains only the registry mapping, no credentials. For local development, the token in your global `~/.npmrc` (step 1) supplies authentication automatically.
+
+> **CI environments:** Do not add `_authToken=${GITHUB_TOKEN}` to the project `.npmrc`. If `GITHUB_TOKEN` is unset, npm resolves it to an empty string and uses that as the token — causing an `E401` — instead of falling back to any other auth source. Instead, configure auth in your CI pipeline by writing to the runner's global `~/.npmrc`:
+> ```yaml
+> - run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+> ```
 
 ### 3. Install the package
 
