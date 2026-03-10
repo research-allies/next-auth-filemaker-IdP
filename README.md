@@ -31,12 +31,34 @@ The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, an
 
 ## Installation
 
+### 1. Create a GitHub Personal Access Token
+
+GitHub Packages does not allow anonymous access. Each developer must authenticate with a PAT:
+
+1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
+2. Click **Generate new token (classic)**
+3. Note: `research-allies npm install`
+4. Select scope: `read:packages`
+5. Click **Generate token** and copy it immediately
+
+Add the token to your **global** `~/.npmrc` (create the file if it doesn't exist):
+
+```
+//npm.pkg.github.com/:_authToken=ghp_xxxxxxxxxxxx
+```
+
+### 2. Configure your project registry
+
 Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-allies` packages from GitHub Packages:
 
 ```
 @research-allies:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
+
+> The `${GITHUB_TOKEN}` placeholder is used in CI environments where the token is injected as an environment variable. For local development, the token in your global `~/.npmrc` (step 1) is sufficient — you do not need to set `GITHUB_TOKEN` locally.
+
+### 3. Install the package
 
 This package requires **Auth.js v5** (`next-auth ^5`) along with `react` and `react-dom` as peer dependencies. Auth.js v5 is still in beta — there is no stable `5.x` release on npm yet, so you must pin the beta explicitly:
 
