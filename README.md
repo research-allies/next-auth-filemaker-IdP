@@ -7,9 +7,8 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 - [How it works](#how-it-works)
 - [FileMaker files](#filemaker-files)
 - [Installation](#installation)
-  - [1. Create a GitHub Personal Access Token](#1-create-a-github-personal-access-token)
-  - [2. Configure your project registry](#2-configure-your-project-registry)
-  - [3. Install the package](#3-install-the-package)
+  - [1. Configure your project registry](#1-configure-your-project-registry)
+  - [2. Install the package](#2-install-the-package)
 - [Setup](#setup)
   - [1. Environment variables](#1-environment-variables)
   - [2. auth.ts](#2-authts)
@@ -65,23 +64,7 @@ The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, an
 
 > **Next.js version note:** This guide is written for **Next.js 16+** as the primary path. Next.js 15 (and earlier) differences are called out where they apply — look for the "Next.js 15" callouts.
 
-### 1. Create a GitHub Personal Access Token
-
-GitHub Packages does not allow anonymous access. Each developer must authenticate with a PAT:
-
-1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
-2. Click **Generate new token (classic)**
-3. In the **Note** field, enter something descriptive (e.g. `research-allies npm install`)
-4. Select scope: `read:packages`
-5. Click **Generate token** and copy it immediately
-
-Add the token to your **global** `~/.npmrc` (create the file if it doesn't exist):
-
-```
-//npm.pkg.github.com/:_authToken=ghp_xxxxxxxxxxxx
-```
-
-### 2. Configure your project registry
+### 1. Configure your project registry
 
 Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-allies` packages from GitHub Packages:
 
@@ -89,14 +72,9 @@ Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-all
 @research-allies:registry=https://npm.pkg.github.com
 ```
 
-> **This file is safe to commit** — it contains only the registry mapping, no credentials. For local development, the token in your global `~/.npmrc` (step 1) supplies authentication automatically.
+This file is safe to commit — it contains only the registry mapping, no credentials. The package is public, so no authentication is required to install it.
 
-> **CI environments:** Do not add `_authToken=${GITHUB_TOKEN}` to the project `.npmrc`. If `GITHUB_TOKEN` is unset, npm resolves it to an empty string and uses that as the token — causing an `E401` — instead of falling back to any other auth source. Instead, configure auth in your CI pipeline by writing to the runner's global `~/.npmrc`:
-> ```yaml
-> - run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
-> ```
-
-### 3. Install the package
+### 2. Install the package
 
 This package requires **Auth.js v5** (`next-auth ^5`) along with `react` and `react-dom` as peer dependencies. Auth.js v5 is still in beta — there is no stable `5.x` release on npm yet, so you must pin the beta explicitly:
 
