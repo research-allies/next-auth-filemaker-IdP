@@ -1,6 +1,6 @@
 {
   "name": "@research-allies/next-auth-filemaker-idp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Auth.js v5 Credentials provider for FileMaker Server IdP",
   "type": "module",
   "main": "./dist/index.cjs",
