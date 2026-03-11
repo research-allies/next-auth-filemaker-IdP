@@ -68,7 +68,7 @@ The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, an
 
 Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-allies` packages from GitHub Packages:
 
-```
+```text
 @research-allies:registry=https://npm.pkg.github.com
 ```
 
