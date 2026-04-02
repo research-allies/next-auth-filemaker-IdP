@@ -23,7 +23,7 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 * defaults only and must be changed before deploying to production.
 
 
-The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, and `userProjectRole` (join). All privilege sets assigned to users must have the `FM_DAPI` extended privilege enabled.
+The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, and `userProjectRole` (join). All privilege sets assigned to users must have the `fmrest` extended privilege enabled.
 
 ---
 
