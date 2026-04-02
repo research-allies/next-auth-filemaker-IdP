@@ -2,11 +2,9 @@
 export type {
   FileMakerIdPConfig,
   FieldMapping,
-  EventLogFieldMapping,
   UserProfile,
   FileMakerUser,
   ProjectAssignment,
-  EventLogEntry,
 } from "./types.js";
 
 // Errors
