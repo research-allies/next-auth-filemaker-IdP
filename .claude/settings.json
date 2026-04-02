@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e ':*)",
-      "Bash(cat /Users/caleb/Documents/GitHub/research-allies/next-auth-filemaker-IdP/.github/workflows/*.yml)",
+      "Bash(node -e *)",
+      "Bash(cat .github/workflows/*.yml)",
       "Bash(node --input-type=module)"
     ]
   }
