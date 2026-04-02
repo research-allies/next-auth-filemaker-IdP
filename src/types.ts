@@ -54,47 +54,6 @@ export interface FieldMapping {
 }
 
 /**
- * Maps env var overrides to FileMaker event log field names.
- * All fields have defaults matching the standard IdP_Accounts.fmp12 schema.
- */
-export interface EventLogFieldMapping {
-  /** Field for event type (e.g. `"signIn"`). Default: `"action"` */
-  actionField: string;
-  /** Field for human-readable detail. Default: `"detail"` */
-  detailField: string;
-  /** Field for error messages. Default: `"error"` */
-  errorField: string;
-  /** Field for foreign key (user PK). Default: `"id_user"` */
-  idUserField: string;
-  /** Field for additional notes. Default: `"notes"` */
-  notesField: string;
-}
-
-/**
- * Payload written to the FileMaker event log layout on auth events.
- * Fields map to FM field names via `fmWriteEventLog`.
- */
-export interface EventLogEntry {
-  /**
-   * Event type written to `eventLogFields.actionField`.
-   *
-   * Built-in values used by this package: `"signIn"`, `"signOut"`, `"signInFailed"`.
-   *
-   * Any string is accepted — consuming apps can pass custom action names
-   * (e.g. `"passwordReset"`, `"profileUpdated"`) when calling `fmWriteEventLog` directly.
-   */
-  action: string;
-  /** Human-readable description mapped to `eventLogFields.detailField` (e.g. username or email). */
-  detail?: string;
-  /** Error message mapped to `eventLogFields.errorField` (failure events only). */
-  error?: string;
-  /** User PK written to `eventLogFields.idUserField`. */
-  idUser?: string;
-  /** Additional context mapped to `eventLogFields.notesField`. */
-  notes?: string;
-}
-
-/**
  * Full runtime configuration for the FileMaker IdP package.
  * Built from environment variables via `loadConfigFromEnv()`.
  */
@@ -113,8 +72,6 @@ export interface FileMakerIdPConfig {
   userLayout: string;
   /** Field name mappings (with defaults matching IdP_Accounts.fmp12 schema) */
   fields: FieldMapping;
-  /** Event log field name mappings (with defaults matching IdP_Accounts.fmp12 schema) */
-  eventLogFields: EventLogFieldMapping;
   /** Request timeout in milliseconds. Default: `10000` */
   timeout: number;
   /**
@@ -122,9 +79,4 @@ export interface FileMakerIdPConfig {
    * Defaults to `globalThis.fetch`.
    */
   fetch?: typeof globalThis.fetch;
-  /**
-   * Data API layout name for event log record creation.
-   * If `undefined` (or `FM_IdP_EVENT_LOG_LAYOUT` is unset), event logging is disabled.
-   */
-  eventLogLayout?: string;
 }
