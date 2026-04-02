@@ -8,7 +8,7 @@
  * credentials to the browser.
  */
 
-import type { FileMakerIdPConfig, FieldMapping, EventLogFieldMapping } from "./types.js";
+import type { FileMakerIdPConfig, FieldMapping } from "./types.js";
 import { ConfigurationError, FileMakerIdPError } from "./errors.js";
 
 const REQUIRED_VARS = [
@@ -75,16 +75,6 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     : 10000;
   const timeout = Number.isNaN(envTimeout) ? 10000 : envTimeout;
 
-  const eventLogFields: EventLogFieldMapping = {
-    actionField: process.env.FM_IdP_EVENTLOG_FIELD_ACTION ?? "action",
-    detailField: process.env.FM_IdP_EVENTLOG_FIELD_DETAIL ?? "detail",
-    errorField: process.env.FM_IdP_EVENTLOG_FIELD_ERROR ?? "error",
-    idUserField: process.env.FM_IdP_EVENTLOG_FIELD_USER_ID ?? "id_user",
-    notesField: process.env.FM_IdP_EVENTLOG_FIELD_NOTES ?? "notes",
-  };
-
-  const eventLogLayout = process.env.FM_IdP_EVENT_LOG_LAYOUT || undefined;
-
   return {
     host: rawHost,
     database: process.env.FM_IdP_DATABASE!,
@@ -93,9 +83,7 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     servicePassword: process.env.FM_IdP_SERVICE_PASSWORD!,
     userLayout: process.env.FM_IdP_USER_LAYOUT ?? "IdP_user",
     fields,
-    eventLogFields,
     timeout,
-    eventLogLayout,
     ...overrides,
   };
 }

@@ -1,4 +1,4 @@
-import type { FileMakerIdPConfig, ProjectAssignment, UserProfile, EventLogEntry } from "./types.js";
+import type { FileMakerIdPConfig, ProjectAssignment, UserProfile } from "./types.js";
 import {
   FileMakerAuthError,
   FileMakerQueryError,
@@ -208,81 +208,6 @@ export async function fmFindUserWithPrivileges(
     );
   } finally {
     timeout.clear();
-  }
-}
-
-/**
- * Writes an event log record to the configured FileMaker layout.
- * Fire-and-forget: logs warnings on failure but never throws.
- * No-op if `config.eventLogLayout` is undefined.
- *
- * @param existingToken - Optional service token to reuse. When provided, skips
- *   login/logout — the caller is responsible for closing the session.
- */
-export async function fmWriteEventLog(
-  config: FileMakerIdPConfig,
-  entry: EventLogEntry,
-  existingToken?: string,
-): Promise<void> {
-  if (!config.eventLogLayout) return;
-
-  // Cap event log timeout at 5s — these are fire-and-forget, so keep them short
-  const eventTimeout = Math.min(config.timeout, 5000);
-
-  const ownsToken = !existingToken;
-  let token = existingToken;
-  if (!token) {
-    try {
-      token = await fmLogin({ ...config, timeout: eventTimeout }, config.serviceUsername, config.servicePassword);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(
-        `[next-auth-filemaker-idp] fmWriteEventLog: service login failed — ${message}`
-      );
-      return;
-    }
-  }
-
-  const baseUrl = buildDataApiBaseUrl(config);
-  const fetchFn = getFetch(config);
-  const timeout = withTimeout(config, eventTimeout);
-
-  try {
-    const { eventLogFields } = config;
-    const fieldData: Record<string, string> = {
-      [eventLogFields.actionField]: entry.action,
-    };
-    if (entry.detail !== undefined) fieldData[eventLogFields.detailField] = entry.detail;
-    if (entry.error !== undefined) fieldData[eventLogFields.errorField] = entry.error;
-    if (entry.idUser !== undefined) fieldData[eventLogFields.idUserField] = entry.idUser;
-    if (entry.notes !== undefined) fieldData[eventLogFields.notesField] = entry.notes;
-
-    const response = await fetchFn(
-      `${baseUrl}/layouts/${encodeURIComponent(config.eventLogLayout)}/records`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ fieldData }),
-        signal: timeout.signal,
-      }
-    );
-
-    if (!response.ok) {
-      console.warn(
-        `[next-auth-filemaker-idp] fmWriteEventLog: HTTP ${response.status}`
-      );
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[next-auth-filemaker-idp] fmWriteEventLog: ${message}`);
-  } finally {
-    timeout.clear();
-    if (ownsToken && token) {
-      void fmLogout(config, token);
-    }
   }
 }
 

@@ -12,20 +12,17 @@ vi.mock("../src/filemaker-client.js", () => ({
   fmLogin: vi.fn(),
   fmFindUserWithPrivileges: vi.fn(),
   fmLogout: vi.fn(),
-  fmWriteEventLog: vi.fn().mockResolvedValue(undefined),
 }));
 
 import {
   fmLogin,
   fmFindUserWithPrivileges,
   fmLogout,
-  fmWriteEventLog,
 } from "../src/filemaker-client.js";
 
 const mockFmLogin = vi.mocked(fmLogin);
 const mockFmFindUser = vi.mocked(fmFindUserWithPrivileges);
 const mockFmLogout = vi.mocked(fmLogout);
-const mockFmWriteEventLog = vi.mocked(fmWriteEventLog);
 
 const mockProfile = {
   id: "u001",
@@ -62,7 +59,6 @@ describe("createFileMakerProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFmLogout.mockResolvedValue(undefined);
-    mockFmWriteEventLog.mockResolvedValue(undefined);
   });
 
   it("returns FileMakerUser on full success", async () => {
@@ -173,103 +169,5 @@ describe("createFileMakerProvider", () => {
 
     expect(mockFmLogin).toHaveBeenNthCalledWith(2, config, "svc_user", "svc_pass");
     expect(mockFmFindUser).toHaveBeenCalledWith(config, "svc_token", "jdoe");
-  });
-});
-
-// ─── fmWriteEventLog called on failure paths ──────────────────────────────────
-
-describe("createFileMakerProvider — event logging on failure", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFmLogout.mockResolvedValue(undefined);
-    mockFmWriteEventLog.mockResolvedValue(undefined);
-  });
-
-  it("calls fmWriteEventLog with 'Invalid credentials' on FileMakerAuthError", async () => {
-    mockFmLogin
-      .mockRejectedValueOnce(new FileMakerAuthError())  // user login
-      .mockResolvedValueOnce("svc_token");               // service login (parallel)
-
-    await callAuthorize({ username: "jdoe", password: "wrong" });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP unknown.",
-      error: "Invalid credentials",
-    }, "svc_token");
-  });
-
-  it("calls fmWriteEventLog with error message + '(FileMaker error)' on generic FileMakerIdPError", async () => {
-    mockFmLogin
-      .mockRejectedValueOnce(new FileMakerIdPError("server error"))  // user login
-      .mockResolvedValueOnce("svc_token");                            // service login (parallel)
-
-    await callAuthorize({ username: "jdoe", password: "pass" });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP unknown.",
-      error: "server error (FileMaker error)",
-    }, "svc_token");
-  });
-
-  it("calls fmWriteEventLog with 'Service account error' when service login fails", async () => {
-    mockFmLogin
-      .mockResolvedValueOnce("user_token")
-      .mockRejectedValueOnce(new FileMakerAuthError("service bad"));
-
-    await callAuthorize({ username: "jdoe", password: "pass" });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP unknown.",
-      error: "Service account error",
-    });
-  });
-
-  it("calls fmWriteEventLog with 'Profile lookup failed' when find fails", async () => {
-    mockFmLogin
-      .mockResolvedValueOnce("user_token")
-      .mockResolvedValueOnce("svc_token");
-    mockFmFindUser.mockRejectedValueOnce(new FileMakerQueryError("Not found"));
-
-    await callAuthorize({ username: "jdoe", password: "pass" });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, {
-      action: "signInFailed",
-      notes: "User jdoe sign in failed from reported IP unknown.",
-      error: "Profile lookup failed",
-    }, "svc_token");
-  });
-
-  it("strips control characters from username in event log notes", async () => {
-    mockFmLogin.mockRejectedValueOnce(new FileMakerAuthError());
-
-    await callAuthorize({ username: "jdoe\x00injected", password: "wrong" });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, expect.objectContaining({
-      notes: "User jdoeinjected sign in failed from reported IP unknown.",
-    }), undefined);
-  });
-
-  it("truncates long usernames to 20 chars in event log notes", async () => {
-    mockFmLogin.mockRejectedValueOnce(new FileMakerAuthError());
-
-    await callAuthorize({ username: "averylongusernameabcde", password: "wrong" });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(config, expect.objectContaining({
-      notes: "User averylongusernameabc sign in failed from reported IP unknown.",
-    }), undefined);
-  });
-
-  it("does not call fmWriteEventLog on success", async () => {
-    mockFmLogin
-      .mockResolvedValueOnce("user_token")
-      .mockResolvedValueOnce("svc_token");
-    mockFmFindUser.mockResolvedValueOnce({ profile: mockProfile, projects: mockProjects });
-
-    await callAuthorize({ username: "jdoe", password: "pass" });
-
-    expect(mockFmWriteEventLog).not.toHaveBeenCalled();
   });
 });

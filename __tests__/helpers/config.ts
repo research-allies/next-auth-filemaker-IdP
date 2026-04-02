@@ -1,6 +1,5 @@
 import type { FileMakerIdPConfig } from "../../src/types.js";
 
-/** Base config without event logging — used by most test files. */
 export const baseConfig: FileMakerIdPConfig = {
   host: "fm.example.com",
   database: "IdP_Accounts",
@@ -20,17 +19,4 @@ export const baseConfig: FileMakerIdPConfig = {
     projectNameField: "project::projectName",
     roleNameField: "role::roleName",
   },
-  eventLogFields: {
-    actionField: "action",
-    detailField: "detail",
-    errorField: "error",
-    idUserField: "id_user",
-    notesField: "notes",
-  },
-};
-
-/** Config with event logging enabled — used by event handler tests. */
-export const eventConfig: FileMakerIdPConfig = {
-  ...baseConfig,
-  eventLogLayout: "IdP_eventlog",
 };

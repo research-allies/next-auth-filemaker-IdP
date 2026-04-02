@@ -2,11 +2,9 @@
 export type {
   FileMakerIdPConfig,
   FieldMapping,
-  EventLogFieldMapping,
   UserProfile,
   FileMakerUser,
   ProjectAssignment,
-  EventLogEntry,
 } from "./types.js";
 
 // Errors
@@ -27,7 +25,6 @@ export { createFileMakerProvider } from "./provider.js";
 export {
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "./callbacks.js";
 export type { FileMakerJWT, FileMakerSession } from "./callbacks.js";
 
@@ -36,5 +33,4 @@ export {
   fmLogin,
   fmLogout,
   fmFindUserWithPrivileges,
-  fmWriteEventLog,
 } from "./filemaker-client.js";

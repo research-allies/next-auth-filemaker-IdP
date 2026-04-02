@@ -1,20 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "../src/callbacks.js";
 import type { FileMakerJWT } from "../src/callbacks.js";
 import type { ProjectAssignment } from "../src/types.js";
-import { eventConfig } from "./helpers/config.js";
-
-// Mock fmWriteEventLog so event handler tests don't make real FM calls
-vi.mock("../src/filemaker-client.js", () => ({
-  fmWriteEventLog: vi.fn().mockResolvedValue(undefined),
-}));
-
-import { fmWriteEventLog } from "../src/filemaker-client.js";
-const mockFmWriteEventLog = vi.mocked(fmWriteEventLog);
 
 const projects: ProjectAssignment[] = [
   { projectId: "p1", projectName: "Monitor", roles: ["admin", "editor"] },
@@ -126,59 +116,5 @@ describe("createSessionCallback", () => {
     expect(result.user.id).toBe("");
     expect(result.user.userName).toBe("");
     expect(result.user.projects).toEqual([]);
-  });
-});
-
-// ─── createEventHandlers ───────────────────────────────────────────────────
-
-// eventConfig imported from ./helpers/config.js
-
-describe("createEventHandlers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("signIn calls fmWriteEventLog with user ID and notes (no PII in detail)", () => {
-    const { signIn } = createEventHandlers(eventConfig);
-    signIn({ user: fmUser });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      action: "signIn",
-      idUser: "u001",
-      notes: "User jdoe signed in.",
-    });
-  });
-
-  it("signOut calls fmWriteEventLog with username in notes", () => {
-    const { signOut } = createEventHandlers(eventConfig);
-    signOut({ token: { id: "u001", userName: "jdoe" } });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      action: "signOut",
-      idUser: "u001",
-      notes: "User jdoe signed out.",
-    });
-  });
-
-  it("signOut handles missing token gracefully", () => {
-    const { signOut } = createEventHandlers(eventConfig);
-    signOut({ token: undefined });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      action: "signOut",
-      idUser: undefined,
-      notes: undefined,
-    });
-  });
-
-  it("signOut handles session-based message shape (no token)", () => {
-    const { signOut } = createEventHandlers(eventConfig);
-    signOut({ session: null });
-
-    expect(mockFmWriteEventLog).toHaveBeenCalledWith(eventConfig, {
-      action: "signOut",
-      idUser: undefined,
-      notes: undefined,
-    });
   });
 });

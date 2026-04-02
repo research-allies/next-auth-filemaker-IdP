@@ -5,7 +5,7 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 ## Table of Contents
 
 - [How it works](#how-it-works)
-- [FileMaker files](#filemaker-files)
+- [FileMaker file](#filemaker-file)
 - [Installation](#installation)
   - [1. Configure your project registry](#1-configure-your-project-registry)
   - [2. Install the package](#2-install-the-package)
@@ -35,11 +35,8 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `IdP_user` layout (with `userProjectRole` portal)
 3. The service session is closed
 4. A JWT is issued containing identity fields and `projects: ProjectAssignment[]` — no FileMaker tokens ever stored in the JWT
-5. Authentication events (sign-in, sign-out, failed sign-in) are written to the `IdP_eventlog` layout in FileMaker, providing a server-side audit trail — opt-in via `FM_IdP_EVENT_LOG_LAYOUT`
 
----
-
-## FileMaker files
+## FileMaker file
 
 | Filename | Description |
 |---|---|
@@ -57,6 +54,8 @@ Default credentials:
 The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, and `userProjectRole` (join). All privilege sets assigned to users must have the `fmrest` extended privilege enabled (in FileMaker, this is labeled "Access via FileMaker Data API (fmrest)" in the privilege set editor).
 
 > **FileMaker database:** If you need the example `IdP_Accounts.fmp12` backend, download it from the [package's GitHub release assets](https://github.com/research-allies/next-auth-filemaker-IdP/releases) and host it on your FileMaker Server. The database is not included in the npm package.
+
+> **Privilege sets:** All privilege sets assigned to users must have the `fmrest` extended privilege enabled.
 
 ---
 
@@ -120,14 +119,21 @@ FM_IdP_SERVICE_PASSWORD=<service-account-password>
 AUTH_SECRET=<random-secret>           # generate: openssl rand -base64 32
 ```
 
-> **Important:** Whether you use `cp` or create `.env.local` manually, the file must contain all variables from `.env.example` — required ones filled in, optional ones present and commented out. Do not create a minimal `.env.local` with only the required vars. The commented-out optional vars serve as inline documentation of what can be configured without consulting external docs.
+# Optional — defaults shown
+FM_IdP_USE_HTTPS=true
+FM_IdP_USER_LAYOUT=IdP_user
+FM_IdP_TIMEOUT=10000
 
-The optional variables (field name overrides, portal name, event log layout, etc.) are documented with their defaults in `.env.example` — uncomment and change only the ones that differ from your schema. See the [Environment variables reference](#environment-variables-reference) for the full list.
-
-Generate `AUTH_SECRET` — the app will not start without it:
-
-```bash
-openssl rand -base64 32
+# Field names — only set if your schema differs from the defaults
+# FM_IdP_FIELD_ID_USER=id_user
+# FM_IdP_FIELD_USERNAME=userName
+# FM_IdP_FIELD_NAME_FIRST=nameFirst
+# FM_IdP_FIELD_NAME_LAST=nameLast
+# FM_IdP_FIELD_EMAIL=email
+# FM_IdP_PORTAL_NAME=userProjectRole
+# FM_IdP_FIELD_PROJECT_ID=project::id_project
+# FM_IdP_FIELD_PROJECT_NAME=project::projectName
+# FM_IdP_FIELD_ROLE_NAME=role::roleName
 ```
 
 ### 2. `auth.ts`
@@ -144,7 +150,6 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 
 const fmConfig = loadConfigFromEnv();
@@ -159,7 +164,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),  // no-op if FM_IdP_EVENT_LOG_LAYOUT is unset
   session: {
     strategy: "jwt",
     maxAge: 60 * 60,   // session expires 60 minutes after last activity
@@ -171,8 +175,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 > **Session expiry:** `maxAge` sets how long the JWT lives from when it was last issued. `updateAge` controls how often Auth.js re-issues it — on each authenticated request that arrives more than `updateAge` seconds after the previous re-issue, the JWT is re-signed and the `maxAge` clock resets. This creates a sliding idle timeout: the session expires only if the user is inactive for the full `maxAge` duration.
 
 > **Security:** `loadConfigFromEnv()` reads service account credentials from `process.env`. Only call it in server-side code — never in a `"use client"` component.
-
-> **Event logging:** `createEventHandlers` is a no-op when `FM_IdP_EVENT_LOG_LAYOUT` is not set — safe to include in all configurations.
 
 #### Next.js 15 and earlier
 
@@ -205,7 +207,6 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 import { authConfig } from "@/auth.config";
 
@@ -219,7 +220,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),
   session: {
     strategy: "jwt",
     maxAge: 60 * 60,   // session expires 60 minutes after last activity
@@ -228,7 +228,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 });
 ```
 
-> **Warning:** Do NOT write `callbacks: { jwt: ..., session: ... }` without spreading `...authConfig.callbacks` first. This silently drops the `authorized` callback from `auth.config.ts`, causing an infinite redirect loop to `/login`. Always spread `authConfig.callbacks` before adding `jwt` and `session`.
+> **Warning (Next.js 15):** Always spread `...authConfig.callbacks` before adding `jwt` and `session`. Omitting the spread silently drops the `authorized` callback, causing an infinite redirect loop to `/login`.
+
+> **Security:** `loadConfigFromEnv()` reads service account credentials from `process.env`. Only call it in server-side code — never in a `"use client"` component.
 
 ### 3. API route handler
 
@@ -540,7 +542,6 @@ export async function signOutAction() {
 | `FM_IdP_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
 | `FM_IdP_USER_LAYOUT` | | `IdP_user` | Layout name for user profile + portal |
 | `FM_IdP_TIMEOUT` | | `10000` | Request timeout in ms |
-| `FM_IdP_EVENT_LOG_LAYOUT` | | *(disabled)* | Layout name for auth event log writes; omit or leave blank to disable |
 | `FM_IdP_FIELD_ID_USER` | | `id_user` | User table PK field |
 | `FM_IdP_FIELD_USERNAME` | | `userName` | Username field (used for Find queries) |
 | `FM_IdP_FIELD_NAME_FIRST` | | `nameFirst` | First name field |
@@ -550,11 +551,6 @@ export async function signOutAction() {
 | `FM_IdP_FIELD_PROJECT_ID` | | `project::id_project` | Portal field — project PK |
 | `FM_IdP_FIELD_PROJECT_NAME` | | `project::projectName` | Portal field — project name |
 | `FM_IdP_FIELD_ROLE_NAME` | | `role::roleName` | Portal field — role name |
-| `FM_IdP_EVENTLOG_FIELD_ACTION` | | `action` | Event log action field |
-| `FM_IdP_EVENTLOG_FIELD_DETAIL` | | `detail` | Event log detail field |
-| `FM_IdP_EVENTLOG_FIELD_ERROR` | | `error` | Event log error field |
-| `FM_IdP_EVENTLOG_FIELD_USER_ID` | | `id_user` | Event log user ID field |
-| `FM_IdP_EVENTLOG_FIELD_NOTES` | | `notes` | Event log notes field |
 
 ---
 

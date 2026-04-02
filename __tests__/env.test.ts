@@ -33,12 +33,6 @@ function clearEnv() {
     "FM_IdP_FIELD_PROJECT_ID",
     "FM_IdP_FIELD_PROJECT_NAME",
     "FM_IdP_FIELD_ROLE_NAME",
-    "FM_IdP_EVENT_LOG_LAYOUT",
-    "FM_IdP_EVENTLOG_FIELD_ACTION",
-    "FM_IdP_EVENTLOG_FIELD_DETAIL",
-    "FM_IdP_EVENTLOG_FIELD_ERROR",
-    "FM_IdP_EVENTLOG_FIELD_USER_ID",
-    "FM_IdP_EVENTLOG_FIELD_NOTES",
   ];
   for (const k of ALL_VARS) {
     delete process.env[k];
@@ -75,12 +69,6 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.projectIdField).toBe("project::id_project");
     expect(config.fields.projectNameField).toBe("project::projectName");
     expect(config.fields.roleNameField).toBe("role::roleName");
-    expect(config.eventLogFields.actionField).toBe("action");
-    expect(config.eventLogFields.detailField).toBe("detail");
-    expect(config.eventLogFields.errorField).toBe("error");
-    expect(config.eventLogFields.idUserField).toBe("id_user");
-    expect(config.eventLogFields.notesField).toBe("notes");
-    expect(config.eventLogLayout).toBeUndefined();
   });
 
   it("respects FM_IdP_USE_HTTPS=false", () => {
@@ -116,23 +104,6 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.roleNameField).toBe("myRole::name");
   });
 
-  it("respects custom event log field name overrides", () => {
-    setEnv({
-      ...REQUIRED_ENV,
-      FM_IdP_EVENTLOG_FIELD_ACTION: "EventType",
-      FM_IdP_EVENTLOG_FIELD_DETAIL: "Description",
-      FM_IdP_EVENTLOG_FIELD_ERROR: "ErrorMsg",
-      FM_IdP_EVENTLOG_FIELD_USER_ID: "UserID",
-      FM_IdP_EVENTLOG_FIELD_NOTES: "Comments",
-    });
-    const config = loadConfigFromEnv();
-    expect(config.eventLogFields.actionField).toBe("EventType");
-    expect(config.eventLogFields.detailField).toBe("Description");
-    expect(config.eventLogFields.errorField).toBe("ErrorMsg");
-    expect(config.eventLogFields.idUserField).toBe("UserID");
-    expect(config.eventLogFields.notesField).toBe("Comments");
-  });
-
   it("throws ConfigurationError when FM_IdP_HOST is missing", () => {
     setEnv({
       FM_IdP_DATABASE: "IdP_Accounts",
@@ -155,18 +126,6 @@ describe("loadConfigFromEnv", () => {
       expect(configErr.missingVars).toContain("FM_IdP_SERVICE_USERNAME");
       expect(configErr.missingVars).toContain("FM_IdP_SERVICE_PASSWORD");
     }
-  });
-
-  it("sets eventLogLayout when FM_IdP_EVENT_LOG_LAYOUT is provided", () => {
-    setEnv({ ...REQUIRED_ENV, FM_IdP_EVENT_LOG_LAYOUT: "IdP_eventlog" });
-    const config = loadConfigFromEnv();
-    expect(config.eventLogLayout).toBe("IdP_eventlog");
-  });
-
-  it("leaves eventLogLayout undefined when FM_IdP_EVENT_LOG_LAYOUT is empty string", () => {
-    setEnv({ ...REQUIRED_ENV, FM_IdP_EVENT_LOG_LAYOUT: "" });
-    const config = loadConfigFromEnv();
-    expect(config.eventLogLayout).toBeUndefined();
   });
 
   it("merges programmatic overrides (fetch)", () => {

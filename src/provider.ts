@@ -1,23 +1,7 @@
 import Credentials from "next-auth/providers/credentials";
 import type { FileMakerIdPConfig, FileMakerUser } from "./types.js";
-import { fmLogin, fmFindUserWithPrivileges, fmLogout, fmWriteEventLog } from "./filemaker-client.js";
-import { FileMakerAuthError, FileMakerIdPError } from "./errors.js";
-
-/** Truncate and strip control characters for safe log interpolation. */
-function safeLogValue(value: string, maxLength = 20): string {
-  return value.slice(0, maxLength).replace(/[\x00-\x1f]/g, "");
-}
-
-/** Builds an event log error string from a caught value.
- * FileMakerAuthError → "Invalid credentials"
- * Other FileMakerIdPError → "{message} (FileMaker error)"
- * Anything else → "{message}"
- */
-function buildLoginError(err: unknown): string {
-  if (err instanceof FileMakerAuthError) return "Invalid credentials";
-  const message = err instanceof Error ? err.message : String(err);
-  return err instanceof FileMakerIdPError ? `${message} (FileMaker error)` : message;
-}
+import { fmLogin, fmFindUserWithPrivileges, fmLogout } from "./filemaker-client.js";
+import { FileMakerAuthError } from "./errors.js";
 
 /**
  * Creates a configured Auth.js v5 Credentials provider that authenticates
@@ -56,14 +40,6 @@ export function createFileMakerProvider(
       const user = String(username);
       const pass = String(password);
 
-      const req = request as Request | undefined;
-      const rawClientIp =
-        req?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        req?.headers?.get("x-real-ip") ??
-        undefined;
-      // Sanitize before log interpolation; 45 chars covers full IPv6 with port
-      const clientIp = rawClientIp !== undefined ? safeLogValue(rawClientIp, 45) : "unknown";
-
       // Step 1: Validate user credentials + open service session in parallel
       const [userResult, serviceResult] = await Promise.allSettled([
         fmLogin(config, user, pass),
@@ -79,8 +55,7 @@ export function createFileMakerProvider(
           );
         }
         const svcToken = serviceResult.status === "fulfilled" ? serviceResult.value : undefined;
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(user)} sign in failed from reported IP ${clientIp}.`, error: buildLoginError(userResult.reason) }, svcToken)
-          .finally(() => { if (svcToken) void fmLogout(config, svcToken); });
+        if (svcToken) void fmLogout(config, svcToken);
         return null;
       }
 
@@ -93,7 +68,6 @@ export function createFileMakerProvider(
           "[next-auth-filemaker-idp] Service account login failed:",
           serviceResult.reason
         );
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(user)} sign in failed from reported IP ${clientIp}.`, error: "Service account error" });
         return null;
       }
 
@@ -113,8 +87,7 @@ export function createFileMakerProvider(
           "[next-auth-filemaker-idp] User profile lookup failed:",
           err
         );
-        void fmWriteEventLog(config, { action: "signInFailed", notes: `User ${safeLogValue(user)} sign in failed from reported IP ${clientIp}.`, error: "Profile lookup failed" }, serviceToken)
-          .finally(() => void fmLogout(config, serviceToken));
+        void fmLogout(config, serviceToken);
         return null;
       }
     },
