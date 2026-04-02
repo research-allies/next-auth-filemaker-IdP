@@ -12,7 +12,6 @@ vi.mock("../src/filemaker-client.js", () => ({
   fmLogin: vi.fn(),
   fmFindUserWithPrivileges: vi.fn(),
   fmLogout: vi.fn(),
-  fmWriteEventLog: vi.fn().mockResolvedValue(undefined),
 }));
 
 import {
