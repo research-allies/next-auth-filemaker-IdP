@@ -53,7 +53,7 @@ FM_IdP_SERVICE_PASSWORD=your-service-password
 AUTH_SECRET=<paste generated secret here>
 ```
 
-The optional variables (field name overrides, portal name, event log layout, etc.) are documented with their defaults in `.env.example` — uncomment and change only the ones that differ from your schema.
+The optional variables (field name overrides, portal name, etc.) are documented with their defaults in `.env.example` — uncomment and change only the ones that differ from your schema.
 
 > **Important:** Whether you use `cp` or create `.env.local` manually, the file must contain all variables from `.env.example` — required ones filled in, optional ones present and commented out. Do not create a minimal `.env.local` with only the required vars. The commented-out optional vars serve as inline documentation of what can be configured without having to consult external docs.
 
@@ -77,7 +77,6 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 
 const fmConfig = loadConfigFromEnv();
@@ -92,7 +91,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),  // no-op if FM_IdP_EVENT_LOG_LAYOUT is unset
   session: {
     strategy: "jwt",
     maxAge: 60 * 60,   // session expires 60 minutes after last activity
@@ -134,7 +132,6 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 import { authConfig } from "@/auth.config";
 
@@ -148,7 +145,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),
   session: {
     strategy: "jwt",
     maxAge: 60 * 60,
@@ -459,7 +455,7 @@ export async function signOutAction() {
 
 ## 11. Rate limiting
 
-> **Warning:** Each login attempt opens **up to 3 Data API sessions** (user validation, service profile lookup, event logging). FileMaker Server has a finite session pool (default: 500 for FM Cloud). Without rate limiting, a brute-force attack can exhaust the session pool within minutes, locking out all Data API consumers — not just this app.
+> **Warning:** Each login attempt opens **up to 2 Data API sessions** (user validation, service profile lookup). FileMaker Server has a finite session pool (default: 500 for FM Cloud). Without rate limiting, a brute-force attack can exhaust the session pool within minutes, locking out all Data API consumers — not just this app.
 
 Implement rate limiting on the login route at the application level. Some options:
 
@@ -485,17 +481,7 @@ Implement rate limiting on the login route at the application level. Some option
 
 - **Middleware/proxy** — track login attempts by IP and block after a threshold.
 
-> **Performance tip:** Each `fmWriteEventLog` call (triggered by `createEventHandlers`) opens its own service session (login → write → logout). If your app logs a high volume of auth events, you can reduce this overhead by caching the service account token in your app with a short TTL (e.g. 60 seconds) and calling `fmWriteEventLog(config, entry, cachedToken)` directly — bypassing `createEventHandlers` — so the cached token is reused instead of opening a new session per event. The package intentionally does not do this internally — a stateful token cache belongs in the consuming app where session lifetime, concurrency, and invalidation strategy can be tailored to the deployment.
-
-## 12. Client IP logging
-
-Failed sign-in events are logged with the client IP extracted from the `x-forwarded-for` or `x-real-ip` request headers. These headers are **trivially spoofable** unless your reverse proxy overwrites them from the actual TCP connection. To ensure accurate IP data in your event logs:
-
-- **Cloudflare / Vercel / AWS ALB** — these platforms set trusted `x-forwarded-for` automatically; no action needed.
-- **nginx** — ensure your config includes `proxy_set_header X-Forwarded-For $remote_addr;` (not `$proxy_add_x_forwarded_for`, which preserves client-supplied values).
-- **No reverse proxy** — the logged IP will be whatever the client sends and should not be trusted for security decisions.
-
-## 13. Self-signed certificates (development only)
+## 12. Self-signed certificates (development only)
 
 > **Warning:** Self-signed certificates should NOT be used in production. Always use a valid, CA-signed certificate for production FileMaker servers.
 
@@ -591,4 +577,3 @@ The package never exposes FileMaker server URLs, layout names, or credentials to
 User-supplied values are sanitized before use in FileMaker queries and log messages:
 
 - **Find queries** — `sanitizeFmFindValue()` strips single-character FM Find operator characters (`= ! < > ≤ ≥ ~ * @ # ? / \ "`) before the value is used in a `_find` request. Multi-character operators are neutralized by the `==` exact-match prefix applied to all queries.
-- **Log interpolation** — `safeLogValue()` truncates values and strips control characters (`\x00–\x1f`) before they are interpolated into event log entries, preventing log injection.

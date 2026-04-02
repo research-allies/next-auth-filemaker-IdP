@@ -8,14 +8,12 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `IdP_user` layout (with `userProjectRole` portal)
 3. The service session is closed
 4. A JWT is issued containing identity fields and `projects: ProjectAssignment[]` — no FileMaker tokens ever stored in the JWT
-5. Authentication events (sign-in, sign-out, failed sign-in) are written to the `IdP_eventlog` layout in FileMaker, providing a server-side audit trail — opt-in via `FM_IdP_EVENT_LOG_LAYOUT`
 
-## FileMaker files
+## FileMaker file
 
 | Filename | Description |
 |---|---|
 | `IdP_Accounts.fmp12` | Manages identities, projects, and role assignments |
-| `IdP_File1.fmp12` | Sample solution file that receives distributed FileMaker accounts |
 
 | FileMaker files username | Password | Note |
 |---|---|---|
@@ -72,7 +70,6 @@ AUTH_SECRET=<random-secret>           # generate: openssl rand -base64 32
 FM_IdP_USE_HTTPS=true
 FM_IdP_USER_LAYOUT=IdP_user
 FM_IdP_TIMEOUT=10000
-# FM_IdP_EVENT_LOG_LAYOUT=IdP_eventlog   # omit or leave blank to disable event logging
 
 # Field names — only set if your schema differs from the defaults
 # FM_IdP_FIELD_ID_USER=id_user
@@ -84,13 +81,6 @@ FM_IdP_TIMEOUT=10000
 # FM_IdP_FIELD_PROJECT_ID=project::id_project
 # FM_IdP_FIELD_PROJECT_NAME=project::projectName
 # FM_IdP_FIELD_ROLE_NAME=role::roleName
-
-# Event log table fields — only set if your schema differs from the defaults
-# FM_IdP_EVENTLOG_FIELD_ACTION=action
-# FM_IdP_EVENTLOG_FIELD_DETAIL=detail
-# FM_IdP_EVENTLOG_FIELD_ERROR=error
-# FM_IdP_EVENTLOG_FIELD_USER_ID=id_user
-# FM_IdP_EVENTLOG_FIELD_NOTES=notes
 ```
 
 ### 2. `auth.ts`
@@ -107,7 +97,6 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 
 const fmConfig = loadConfigFromEnv();
@@ -122,7 +111,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),
   session: { strategy: "jwt", maxAge: 60 * 60, updateAge: 5 * 60 },
 });
 ```
@@ -154,7 +142,6 @@ import {
   createFileMakerProvider,
   createJwtCallback,
   createSessionCallback,
-  createEventHandlers,
 } from "@research-allies/next-auth-filemaker-idp";
 import { authConfig } from "@/auth.config";
 
@@ -168,7 +155,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     jwt: createJwtCallback(),
     session: createSessionCallback(),
   },
-  events: createEventHandlers(fmConfig),
   session: { strategy: "jwt", maxAge: 60 * 60, updateAge: 5 * 60 },
 });
 ```
@@ -176,8 +162,6 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 > **Warning (Next.js 15):** Always spread `...authConfig.callbacks` before adding `jwt` and `session`. Omitting the spread silently drops the `authorized` callback, causing an infinite redirect loop to `/login`.
 
 > **Security:** `loadConfigFromEnv()` reads service account credentials from `process.env`. Only call it in server-side code — never in a `"use client"` component.
-
-> **Event logging:** `createEventHandlers` is a no-op when `FM_IdP_EVENT_LOG_LAYOUT` is not set — safe to include in all configurations.
 
 ### 3. API route handler
 
@@ -385,7 +369,6 @@ export default async function AdminPage({ params }: { params: Promise<{ projectI
 | `FM_IdP_USE_HTTPS` | | `true` | Use HTTPS for Data API calls |
 | `FM_IdP_USER_LAYOUT` | | `IdP_user` | Layout name for user profile + portal |
 | `FM_IdP_TIMEOUT` | | `10000` | Request timeout in ms |
-| `FM_IdP_EVENT_LOG_LAYOUT` | | *(disabled)* | Layout name for auth event log writes; omit or leave blank to disable |
 | `FM_IdP_FIELD_ID_USER` | | `id_user` | User table PK field |
 | `FM_IdP_FIELD_USERNAME` | | `userName` | Username field (used for Find queries) |
 | `FM_IdP_FIELD_NAME_FIRST` | | `nameFirst` | First name field |
@@ -395,11 +378,6 @@ export default async function AdminPage({ params }: { params: Promise<{ projectI
 | `FM_IdP_FIELD_PROJECT_ID` | | `project::id_project` | Portal field — project PK |
 | `FM_IdP_FIELD_PROJECT_NAME` | | `project::projectName` | Portal field — project name |
 | `FM_IdP_FIELD_ROLE_NAME` | | `role::roleName` | Portal field — role name |
-| `FM_IdP_EVENTLOG_FIELD_ACTION` | | `action` | Event log action field |
-| `FM_IdP_EVENTLOG_FIELD_DETAIL` | | `detail` | Event log detail field |
-| `FM_IdP_EVENTLOG_FIELD_ERROR` | | `error` | Event log error field |
-| `FM_IdP_EVENTLOG_FIELD_USER_ID` | | `id_user` | Event log user ID field |
-| `FM_IdP_EVENTLOG_FIELD_NOTES` | | `notes` | Event log notes field |
 
 ---
 
