@@ -86,7 +86,7 @@ Define the data shapes and configuration options that every other module depends
 - `nameFirstField` ← `FM_IdP_FIELD_NAME_FIRST` (default `"nameFirst"`)
 - `nameLastField` ← `FM_IdP_FIELD_NAME_LAST` (default `"nameLast"`)
 - `emailField` ← `FM_IdP_FIELD_EMAIL` (default `"email"`)
-- `portalName` ← `FM_IdP_PORTAL_NAME` (default `"userProjectRole"`) — portal name on the User layout (case-sensitive, matches FM relationship name)
+- `portalName` ← `FM_IdP_PORTAL_NAME` (default `"user_project_role"`) — portal name on the User layout (case-sensitive, matches FM relationship name)
 - `projectIdField` ← `FM_IdP_FIELD_PROJECT_ID` (default `"project::id_project"`) — portal field, `TableName::fieldName` format
 - `projectNameField` ← `FM_IdP_FIELD_PROJECT_NAME` (default `"project::projectName"`) — portal field, `TableName::fieldName` format
 - `roleNameField` ← `FM_IdP_FIELD_ROLE_NAME` (default `"role::roleName"`) — portal field, `TableName::fieldName` format
@@ -119,7 +119,7 @@ AUTH_SECRET=
 # FM_IdP_FIELD_EMAIL=email
 
 # UserProjectRole portal fields (portal rows use TableName::fieldName format)
-# FM_IdP_PORTAL_NAME=userProjectRole
+# FM_IdP_PORTAL_NAME=user_project_role
 # FM_IdP_FIELD_PROJECT_ID=project::id_project
 # FM_IdP_FIELD_PROJECT_NAME=project::projectName
 # FM_IdP_FIELD_ROLE_NAME=role::roleName

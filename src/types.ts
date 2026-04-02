@@ -43,7 +43,7 @@ export interface FieldMapping {
   nameLastField: string;
   /** Default: `"email"` */
   emailField: string;
-  /** Portal name on the user layout (case-sensitive). Default: `"userProjectRole"` */
+  /** Portal name on the user layout (case-sensitive). Default: `"user_project_role"` */
   portalName: string;
   /** Portal field in `TableName::fieldName` format. Default: `"project::id_project"` */
   projectIdField: string;

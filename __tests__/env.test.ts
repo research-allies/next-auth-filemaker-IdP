@@ -65,7 +65,7 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.nameFirstField).toBe("nameFirst");
     expect(config.fields.nameLastField).toBe("nameLast");
     expect(config.fields.emailField).toBe("email");
-    expect(config.fields.portalName).toBe("userProjectRole");
+    expect(config.fields.portalName).toBe("user_project_role");
     expect(config.fields.projectIdField).toBe("project::id_project");
     expect(config.fields.projectNameField).toBe("project::projectName");
     expect(config.fields.roleNameField).toBe("role::roleName");

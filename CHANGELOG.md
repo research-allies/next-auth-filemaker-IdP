@@ -4,6 +4,16 @@ All notable changes to `@research-allies/next-auth-filemaker-idp` are documented
 
 ---
 
+## [0.3.0] — 2026-04-03
+
+### Breaking Changes
+
+- **Default portal name changed** from `userProjectRole` to `user_project_role`.
+
+If you rely on the default value of `FM_IdP_PORTAL_NAME`, you must either rename the portal object on your FileMaker layout to `user_project_role` or explicitly set `FM_IdP_PORTAL_NAME=userProjectRole` in your environment to preserve the old behavior.
+
+---
+
 ## [0.2.0] — 2026-04-02
 
 ### Breaking Changes

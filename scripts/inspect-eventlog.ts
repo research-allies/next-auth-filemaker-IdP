@@ -13,7 +13,7 @@ const config: FileMakerIdPConfig = {
   database: process.env.FM_IdP_DATABASE ?? "IdP_Accounts.fmp12",
   useHttps: true,
   serviceUsername, servicePassword, userLayout: "IdP_user", timeout: 10000,
-  fields: { idUserField:"id_user", usernameField:"userName", nameFirstField:"nameFirst", nameLastField:"nameLast", emailField:"email", portalName:"userProjectRole", projectIdField:"project::id_project", projectNameField:"project::projectName", roleNameField:"role::roleName" },
+  fields: { idUserField:"id_user", usernameField:"userName", nameFirstField:"nameFirst", nameLastField:"nameLast", emailField:"email", portalName:"user_project_role", projectIdField:"project::id_project", projectNameField:"project::projectName", roleNameField:"role::roleName" },
 };
 
 async function tryPost(token: string, fieldData: Record<string, string>) {

@@ -55,7 +55,7 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     nameFirstField: process.env.FM_IdP_FIELD_NAME_FIRST ?? "nameFirst",
     nameLastField: process.env.FM_IdP_FIELD_NAME_LAST ?? "nameLast",
     emailField: process.env.FM_IdP_FIELD_EMAIL ?? "email",
-    portalName: process.env.FM_IdP_PORTAL_NAME ?? "userProjectRole",
+    portalName: process.env.FM_IdP_PORTAL_NAME ?? "user_project_role",
     projectIdField: process.env.FM_IdP_FIELD_PROJECT_ID ?? "project::id_project",
     projectNameField:
       process.env.FM_IdP_FIELD_PROJECT_NAME ?? "project::projectName",

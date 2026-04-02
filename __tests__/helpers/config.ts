@@ -14,7 +14,7 @@ export const baseConfig: FileMakerIdPConfig = {
     nameFirstField: "nameFirst",
     nameLastField: "nameLast",
     emailField: "email",
-    portalName: "userProjectRole",
+    portalName: "user_project_role",
     projectIdField: "project::id_project",
     projectNameField: "project::projectName",
     roleNameField: "role::roleName",

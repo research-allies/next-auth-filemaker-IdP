@@ -32,7 +32,7 @@ Auth.js v5 Credentials provider for authenticating users against an on-premises 
 ## How it works
 
 1. User submits credentials → FileMaker Data API validates them (session token immediately discarded)
-2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `IdP_user` layout (with `userProjectRole` portal)
+2. A backend service account opens a session and fetches the user's profile + project/role assignments from the `IdP_user` layout (with `user_project_role` portal)
 3. The service session is closed
 4. A JWT is issued containing identity fields and `projects: ProjectAssignment[]` — no FileMaker tokens ever stored in the JWT
 
@@ -130,7 +130,7 @@ FM_IdP_TIMEOUT=10000
 # FM_IdP_FIELD_NAME_FIRST=nameFirst
 # FM_IdP_FIELD_NAME_LAST=nameLast
 # FM_IdP_FIELD_EMAIL=email
-# FM_IdP_PORTAL_NAME=userProjectRole
+# FM_IdP_PORTAL_NAME=user_project_role
 # FM_IdP_FIELD_PROJECT_ID=project::id_project
 # FM_IdP_FIELD_PROJECT_NAME=project::projectName
 # FM_IdP_FIELD_ROLE_NAME=role::roleName
@@ -547,7 +547,7 @@ export async function signOutAction() {
 | `FM_IdP_FIELD_NAME_FIRST` | | `nameFirst` | First name field |
 | `FM_IdP_FIELD_NAME_LAST` | | `nameLast` | Last name field |
 | `FM_IdP_FIELD_EMAIL` | | `email` | Email field |
-| `FM_IdP_PORTAL_NAME` | | `userProjectRole` | Portal name on the user layout |
+| `FM_IdP_PORTAL_NAME` | | `user_project_role` | Portal name on the user layout |
 | `FM_IdP_FIELD_PROJECT_ID` | | `project::id_project` | Portal field — project PK |
 | `FM_IdP_FIELD_PROJECT_NAME` | | `project::projectName` | Portal field — project name |
 | `FM_IdP_FIELD_ROLE_NAME` | | `role::roleName` | Portal field — role name |
@@ -690,7 +690,7 @@ Failed sign-in events are logged with the client IP extracted from the `x-forwar
 | Infinite redirect loop to `/login` (Next.js 16 `proxy.ts`) | Separate NextAuth instance created in `proxy.ts` — JWT signature mismatch | Use `import { auth } from "@/auth"; export { auth as proxy };` |
 | `The Proxy file must export a function named "proxy" or a default function` | `auth` exported as default instead of named `proxy` | Change `export default auth` to `export { auth as proxy }` in `proxy.ts` |
 | `401` error on profile lookup after successful login | Wrong layout name — Data API layout names are case-sensitive | Verify `FM_IdP_USER_LAYOUT` matches the exact layout name in FileMaker (default: `IdP_user`) |
-| User authenticates but `projects` array is empty | Wrong portal name — portal names are case-sensitive | Verify `FM_IdP_PORTAL_NAME` matches the exact portal object name on the layout (default: `userProjectRole`) |
+| User authenticates but `projects` array is empty | Wrong portal name — portal names are case-sensitive | Verify `FM_IdP_PORTAL_NAME` matches the exact portal object name on the layout (default: `user_project_role`) |
 | `401` on login even with correct credentials | Account's privilege set missing the `fmrest` extended privilege | In FileMaker, enable the `fmrest` extended privilege on the account's privilege set — without it the Data API rejects all sessions for that account |
 | `ConfigurationError: Missing required environment variables` | Required `FM_IdP_*` env vars not set | Check that `FM_IdP_HOST`, `FM_IdP_DATABASE`, `FM_IdP_SERVICE_USERNAME`, and `FM_IdP_SERVICE_PASSWORD` are all set in `.env.local` |
 | `FileMakerAuthError: Invalid FileMaker credentials` | Service account credentials are wrong, or user credentials are wrong | For service account errors (during profile lookup), check `FM_IdP_SERVICE_USERNAME`/`FM_IdP_SERVICE_PASSWORD`. For user errors, the login form will show an error message. |

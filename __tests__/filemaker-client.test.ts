@@ -99,7 +99,7 @@ const userRecord = {
     email: "jdoe@example.com",
   },
   portalData: {
-    userProjectRole: [
+    user_project_role: [
       {
         "project::id_project": "p1",
         "project::projectName": "Monitor",
