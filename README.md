@@ -51,7 +51,7 @@ Default credentials:
 
 \* defaults only — must be changed before deploying to production.
 
-The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, and `userProjectRole` (join). All privilege sets assigned to users must have the `fmrest` extended privilege enabled (in FileMaker, this is labeled "Access via FileMaker Data API (fmrest)" in the privilege set editor).
+The `IdP_Accounts.fmp12` database has four tables: `user`, `project`, `role`, and `user_project_role` (join). All privilege sets assigned to users must have the `fmrest` extended privilege enabled (in FileMaker, this is labeled "Access via FileMaker Data API (fmrest)" in the privilege set editor).
 
 > **FileMaker database:** If you need the example `IdP_Accounts.fmp12` backend, download it from the [package's GitHub release assets](https://github.com/research-allies/next-auth-filemaker-IdP/releases) and host it on your FileMaker Server. The database is not included in the npm package.
 

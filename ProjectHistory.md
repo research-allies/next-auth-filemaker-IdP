@@ -63,7 +63,7 @@ The full package was built out in one large session. Before the core commit, a s
 First live test against the production FileMaker server. Key findings:
 
 - FM layout name is `IdP_user` (originally planned as `DAPI_USER`) — case-sensitive
-- FM portal name is `userProjectRole` (lowercase `u`) — case-sensitive
+- FM portal name is `user_project_role` — case-sensitive
 - Confirmed OData does not return portal data (live validation of the Phase 2 pivot)
 
 ---

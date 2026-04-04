@@ -105,7 +105,7 @@ FM_IdP_SERVICE_PASSWORD=
 # Auth.js secret — standard NextAuth env var (generate with: openssl rand -base64 32)
 AUTH_SECRET=
 
-# Data API layout for user profile lookup (includes userProjectRole portal)
+# Data API layout for user profile lookup (includes user_project_role portal)
 # FM_IdP_USER_LAYOUT=IdP_user
 
 # Request timeout in milliseconds (default: 10000)
@@ -138,7 +138,7 @@ AUTH_SECRET=
 - **User** — `id_user` (PK, string), `userName` (string), `nameFirst` (string), `nameLast` (string), `email` (string), `status_bool` (number, internal use only — not exposed to the auth package)
 - **Project** — `id_project` (PK, string), `projectName` (string)
 - **Role** — `id_role` (PK, string), `roleName` (string)
-- **UserProjectRole** — `id_userProjectRole` (PK), `id_user` (FK), `id_project` (FK), `id_role` (FK) — join table allowing a user to hold multiple roles across multiple projects
+- **user_project_role** — `id_user_project_role` (PK), `id_user` (FK), `id_project` (FK), `id_role` (FK) — join table allowing a user to hold multiple roles across multiple projects
 
 > **Note:** Passwords are not stored in the User table. FileMaker handles credential validation internally via the Data API session endpoint. The `userName` field maps to the FileMaker account name used for authentication.
 

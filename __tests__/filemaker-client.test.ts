@@ -154,7 +154,7 @@ describe("fmFindUserWithPrivileges", () => {
   it("returns empty projects array when user has no portal rows", async () => {
     const recordNoPortal = {
       fieldData: userRecord.fieldData,
-      portalData: { userProjectRole: [] },
+      portalData: { user_project_role: [] },
     };
     const config = {
       ...baseConfig,
