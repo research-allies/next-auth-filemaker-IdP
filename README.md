@@ -71,7 +71,15 @@ Add a `.npmrc` to your consuming app's root so npm knows to fetch `@research-all
 @research-allies:registry=https://npm.pkg.github.com
 ```
 
-This file is safe to commit — it contains only the registry mapping, no credentials. The package is public, so no authentication is required to install it.
+This file is safe to commit — it contains only the registry mapping, no credentials.
+
+GitHub Packages requires authentication even for public packages. Add your GitHub personal access token (classic, with at least `read:packages` scope) to your **user-level** `~/.npmrc` — do not commit this:
+
+```text
+//npm.pkg.github.com/:_authToken=YOUR_GITHUB_PAT
+```
+
+For CI environments, set the token as a secret (e.g. `GITHUB_TOKEN` or a PAT) and write it to `.npmrc` in your workflow, or use the `NODE_AUTH_TOKEN` environment variable with the `setup-node` action.
 
 ### 2. Install the package
 
