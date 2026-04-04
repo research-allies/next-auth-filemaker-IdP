@@ -9,7 +9,7 @@ jobs:
     name: Build, test, and publish
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -39,3 +39,8 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload FileMaker file to release
+        run: gh release upload "${{ github.ref_name }}" "FM files/IdP_Accounts.fmp12" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
