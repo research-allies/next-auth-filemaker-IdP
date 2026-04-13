@@ -4,6 +4,16 @@ All notable changes to `@research-allies/next-auth-filemaker-idp` are documented
 
 ---
 
+## [0.3.1] — 2026-04-05
+
+### Fixes / Chores
+
+- Corrected README instructions for installing from GitHub Packages
+- Fixed a missed rename of `userProjectRole` → `user_project_role` in docs and one test
+- Added `.fmp12` FileMaker file as a GitHub release asset
+
+---
+
 ## [0.3.0] — 2026-04-03
 
 ### Breaking Changes
