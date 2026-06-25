@@ -24,7 +24,7 @@
 
 ## Architecture
 
-See `ImplementationPlan.md` for the full 11-step build plan (source of truth).
+See `plans/ImplementationPlan.md` for the full 11-step build plan (source of truth).
 See `IntegrationProc.md` for consuming app integration guide.
 
 ## Key Decisions
