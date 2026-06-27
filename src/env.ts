@@ -60,6 +60,8 @@ export function loadConfigFromEnv(overrides?: Overrides): FileMakerIdPConfig {
     projectNameField:
       process.env.FM_IdP_FIELD_PROJECT_NAME ?? "project::projectName",
     roleNameField: process.env.FM_IdP_FIELD_ROLE_NAME ?? "role::roleName",
+    projectDatabaseField:
+      process.env.FM_IdP_FIELD_PROJECT_DATABASE ?? "project::database_project_data",
   };
 
   const useHttps = process.env.FM_IdP_USE_HTTPS !== "false";

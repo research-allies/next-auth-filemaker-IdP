@@ -103,16 +103,19 @@ const userRecord = {
       {
         "project::id_project": "p1",
         "project::projectName": "Monitor",
+        "project::database_project_data": "MonitorDB.fmp12",
         "role::roleName": "admin",
       },
       {
         "project::id_project": "p1",
         "project::projectName": "Monitor",
+        "project::database_project_data": "MonitorDB.fmp12",
         "role::roleName": "editor",
       },
       {
         "project::id_project": "p2",
         "project::projectName": "Design",
+        "project::database_project_data": "DesignDB.fmp12",
         "role::roleName": "viewer",
       },
     ],
@@ -142,11 +145,13 @@ describe("fmFindUserWithPrivileges", () => {
     expect(result.projects[0]).toMatchObject({
       projectId: "p1",
       projectName: "Monitor",
+      projectDatabase: "MonitorDB.fmp12",
       roles: ["admin", "editor"],
     });
     expect(result.projects[1]).toMatchObject({
       projectId: "p2",
       projectName: "Design",
+      projectDatabase: "DesignDB.fmp12",
       roles: ["viewer"],
     });
   });

@@ -6,6 +6,7 @@ export interface ProjectAssignment {
   projectId: string;
   projectName: string;
   roles: string[];
+  projectDatabase: string;
 }
 
 /**
@@ -51,6 +52,8 @@ export interface FieldMapping {
   projectNameField: string;
   /** Portal field in `TableName::fieldName` format. Default: `"role::roleName"` */
   roleNameField: string;
+  /** Portal field in `TableName::fieldName` format. Default: `"project::database_project_data"` */
+  projectDatabaseField: string;
 }
 
 /**

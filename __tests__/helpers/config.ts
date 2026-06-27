@@ -18,5 +18,6 @@ export const baseConfig: FileMakerIdPConfig = {
     projectIdField: "project::id_project",
     projectNameField: "project::projectName",
     roleNameField: "role::roleName",
+    projectDatabaseField: "project::database_project_data",
   },
 };

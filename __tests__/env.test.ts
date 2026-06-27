@@ -33,6 +33,7 @@ function clearEnv() {
     "FM_IdP_FIELD_PROJECT_ID",
     "FM_IdP_FIELD_PROJECT_NAME",
     "FM_IdP_FIELD_ROLE_NAME",
+    "FM_IdP_FIELD_PROJECT_DATABASE",
   ];
   for (const k of ALL_VARS) {
     delete process.env[k];
@@ -69,6 +70,7 @@ describe("loadConfigFromEnv", () => {
     expect(config.fields.projectIdField).toBe("project::id_project");
     expect(config.fields.projectNameField).toBe("project::projectName");
     expect(config.fields.roleNameField).toBe("role::roleName");
+    expect(config.fields.projectDatabaseField).toBe("project::database_project_data");
   });
 
   it("respects FM_IdP_USE_HTTPS=false", () => {

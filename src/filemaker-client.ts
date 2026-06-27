@@ -180,11 +180,12 @@ export async function fmFindUserWithPrivileges(
       const projectId = String(row[fields.projectIdField] ?? "");
       const projectName = String(row[fields.projectNameField] ?? "");
       const roleName = String(row[fields.roleNameField] ?? "");
+      const projectDatabase = String(row[fields.projectDatabaseField] ?? "");
 
       if (!projectId) continue;
 
       if (!projectMap.has(projectId)) {
-        projectMap.set(projectId, { projectId, projectName, roles: [] });
+        projectMap.set(projectId, { projectId, projectName, projectDatabase, roles: [] });
       }
       if (roleName) {
         projectMap.get(projectId)!.roles.push(roleName);
