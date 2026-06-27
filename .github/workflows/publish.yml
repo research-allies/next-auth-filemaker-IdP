@@ -41,6 +41,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload FileMaker file to release
-        run: gh release upload "${{ github.ref_name }}" "FM files/IdP_Accounts.fmp12" --clobber
+        run: gh release upload "${{ github.ref_name }}" "release-assets/IdP_Accounts.fmp12" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
