@@ -4,6 +4,24 @@ All notable changes to `@research-allies/next-auth-filemaker-idp` are documented
 
 ---
 
+## [0.4.0] — 2026-06-27
+
+### Breaking Changes
+
+- **`ProjectAssignment` now includes a `projectDatabase` field** populated from the portal field `project::database_project_data` (configurable via `FM_IdP_FIELD_PROJECT_DATABASE`).
+
+  **FileMaker layouts that do not expose this portal field will cause sign-in to fail.** Before upgrading, add a `database_project_data` field to the project portal object on your IdP layout, or set `FM_IdP_FIELD_PROJECT_DATABASE` to an existing portal field that holds the target database filename. If your app does not use `projectDatabase`, you may point the env var at any portal field that reliably returns a value (e.g. `project::id_project`).
+
+### New Features
+
+- `projectDatabase` is now available on each `ProjectAssignment` at sign-in, sourced from the FileMaker portal via the Data API.
+
+### Fixes / Chores
+
+- Upgraded GitHub Actions runners to Node.js 24 runtime.
+
+---
+
 ## [0.3.1] — 2026-04-05
 
 ### Fixes / Chores
